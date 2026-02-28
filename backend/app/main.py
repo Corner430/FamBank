@@ -1,0 +1,74 @@
+"""FastAPI app entry point with CORS, router mount, static file serving."""
+
+import os
+from contextlib import asynccontextmanager
+
+import structlog
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from app.api import accounts as accounts_api
+from app.api import auth as auth_api
+from app.api import config as config_api
+from app.api import income as income_api
+from app.api import redemption as redemption_api
+from app.api import settlement as settlement_api
+from app.api import transactions as transactions_api
+from app.api import violations as violations_api
+from app.api import wishlist as wishlist_api
+from app.logging_config import setup_logging
+from app.middleware.logging_middleware import RequestLoggingMiddleware
+from app.schemas.common import HealthResponse
+
+logger = structlog.get_logger("fambank")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: startup and shutdown."""
+    setup_logging()
+    logger.info("app_started", version="0.1.0")
+    yield
+    logger.info("app_stopped")
+
+
+app = FastAPI(
+    title="FamBank 家庭内部银行",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# CORS for frontend dev server
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:8000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Request logging middleware
+app.add_middleware(RequestLoggingMiddleware)
+
+# API routes
+app.include_router(auth_api.router, prefix="/api/v1")
+app.include_router(income_api.router, prefix="/api/v1")
+app.include_router(accounts_api.router, prefix="/api/v1")
+app.include_router(settlement_api.router, prefix="/api/v1")
+app.include_router(redemption_api.router, prefix="/api/v1")
+app.include_router(config_api.router, prefix="/api/v1")
+app.include_router(wishlist_api.router, prefix="/api/v1")
+app.include_router(transactions_api.router, prefix="/api/v1")
+app.include_router(violations_api.router, prefix="/api/v1")
+
+
+@app.get("/api/v1/health", response_model=HealthResponse)
+async def health_check():
+    return HealthResponse(status="ok", version="0.1.0")
+
+
+# Mount static files for production (frontend build output)
+frontend_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
+if os.path.isdir(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
