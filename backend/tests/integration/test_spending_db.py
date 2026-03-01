@@ -31,7 +31,7 @@ class TestSpendFromA:
     @pytest.mark.asyncio
     async def test_spend_deducts_balance(self, funded_a: AsyncSession):
         """Spending 50 yuan from 100 yuan leaves 50 yuan."""
-        result = await spend_from_a(funded_a, 5000, "买文具")
+        result = await spend_from_a(funded_a, 5000, "买文具", family_id=1, user_id=2)
         assert result["balance_before"] == 10000
         assert result["balance_after"] == 5000
         assert result["amount"] == 5000
@@ -46,7 +46,7 @@ class TestSpendFromA:
     @pytest.mark.asyncio
     async def test_spend_creates_transaction_log(self, funded_a: AsyncSession):
         """Spending creates a transaction log entry with correct fields."""
-        await spend_from_a(funded_a, 3000, "买书")
+        await spend_from_a(funded_a, 3000, "买书", family_id=1, user_id=2)
 
         txn_result = await funded_a.execute(
             select(TransactionLog).where(TransactionLog.type == "a_spend")
@@ -64,7 +64,7 @@ class TestSpendFromA:
     @pytest.mark.asyncio
     async def test_spend_exact_balance(self, funded_a: AsyncSession):
         """Spending exactly the entire balance should succeed."""
-        result = await spend_from_a(funded_a, 10000, "全部花光")
+        result = await spend_from_a(funded_a, 10000, "全部花光", family_id=1, user_id=2)
         assert result["balance_after"] == 0
 
         acct = await funded_a.execute(
@@ -77,32 +77,32 @@ class TestSpendFromA:
     async def test_overdraft_rejected(self, funded_a: AsyncSession):
         """Spending more than balance raises ValueError."""
         with pytest.raises(ValueError, match="余额不足"):
-            await spend_from_a(funded_a, 10001, "超支")
+            await spend_from_a(funded_a, 10001, "超支", family_id=1, user_id=2)
 
     @pytest.mark.asyncio
     async def test_zero_balance_spend_rejected(self, seeded_accounts: AsyncSession):
         """Spending from zero balance raises ValueError."""
         with pytest.raises(ValueError, match="余额不足"):
-            await spend_from_a(seeded_accounts, 1, "零余额消费")
+            await spend_from_a(seeded_accounts, 1, "零余额消费", family_id=1, user_id=2)
 
     @pytest.mark.asyncio
     async def test_negative_amount_rejected(self, funded_a: AsyncSession):
         """Negative spend amount raises ValueError."""
         with pytest.raises(ValueError, match="正数"):
-            await spend_from_a(funded_a, -100, "负数")
+            await spend_from_a(funded_a, -100, "负数", family_id=1, user_id=2)
 
     @pytest.mark.asyncio
     async def test_zero_amount_rejected(self, funded_a: AsyncSession):
         """Zero spend amount raises ValueError."""
         with pytest.raises(ValueError, match="正数"):
-            await spend_from_a(funded_a, 0, "零元")
+            await spend_from_a(funded_a, 0, "零元", family_id=1, user_id=2)
 
     @pytest.mark.asyncio
     async def test_multiple_spends(self, funded_a: AsyncSession):
         """Multiple sequential spends should each deduct correctly."""
-        await spend_from_a(funded_a, 3000, "第一笔")
-        await spend_from_a(funded_a, 2000, "第二笔")
-        result = await spend_from_a(funded_a, 1000, "第三笔")
+        await spend_from_a(funded_a, 3000, "第一笔", family_id=1, user_id=2)
+        await spend_from_a(funded_a, 2000, "第二笔", family_id=1, user_id=2)
+        result = await spend_from_a(funded_a, 1000, "第三笔", family_id=1, user_id=2)
 
         assert result["balance_before"] == 5000
         assert result["balance_after"] == 4000

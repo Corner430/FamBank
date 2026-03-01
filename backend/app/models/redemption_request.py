@@ -12,6 +12,7 @@ class RedemptionRequest(Base):
     __tablename__ = "redemption_request"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("family.id"), nullable=False)
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     fee: Mapped[int] = mapped_column(BigInteger, nullable=False)
     net: Mapped[int] = mapped_column(BigInteger, nullable=False)

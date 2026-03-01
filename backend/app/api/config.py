@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ParentUser
+from app.api.deps import ParentContext
 from app.database import get_db
 from app.models.config import Announcement
 from app.schemas.config import (
@@ -20,11 +20,11 @@ router = APIRouter(tags=["config"])
 
 @router.get("/config", response_model=ConfigListResponse)
 async def list_config(
-    user: ParentUser,
+    ctx: ParentContext,
     db: AsyncSession = Depends(get_db),
 ):
-    """List all current config values. Parent-only. S8"""
-    configs = await get_all_config(db)
+    """List all current config values for the family. Parent-only. S8"""
+    configs = await get_all_config(db, family_id=ctx.family_id)
     return ConfigListResponse(
         configs=[
             ConfigItem(
@@ -40,7 +40,7 @@ async def list_config(
 @router.post("/config/announce", response_model=AnnouncementDetail)
 async def create_announcement(
     req: AnnounceRequest,
-    user: ParentUser,
+    ctx: ParentContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Announce a config parameter change (effective next month 1st). Parent-only. S8"""
@@ -50,7 +50,10 @@ async def create_announcement(
         raise HTTPException(status_code=400, detail="参数值不能为空")
 
     try:
-        result = await announce_change(db, req.key, req.new_value, req.reason)
+        result = await announce_change(
+            db, req.key, req.new_value, req.reason,
+            family_id=ctx.family_id,
+        )
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -68,12 +71,14 @@ async def create_announcement(
 
 @router.get("/config/announcements")
 async def list_announcements(
-    user: ParentUser,
+    ctx: ParentContext,
     db: AsyncSession = Depends(get_db),
 ):
-    """List all announcements. Parent-only. S8"""
+    """List all announcements for the family. Parent-only. S8"""
     result = await db.execute(
-        select(Announcement).order_by(Announcement.created_at.desc())
+        select(Announcement)
+        .where(Announcement.family_id == ctx.family_id)
+        .order_by(Announcement.created_at.desc())
     )
     announcements = result.scalars().all()
 

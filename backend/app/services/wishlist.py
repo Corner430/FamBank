@@ -59,15 +59,28 @@ def get_p_active(wish_list: WishList, items: list[WishItem]) -> int:
     return wish_list.max_price
 
 
-async def get_active_wish_list(session: AsyncSession) -> dict | None:
+async def get_active_wish_list(
+    session: AsyncSession,
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
+) -> dict | None:
     """Return the current active wish list with items, or None.
+
+    Args:
+        session: Database session.
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: User ID for per-child wish list filtering.
 
     Returns:
         Dict with wish_list, items, and p_active, or None.
     """
-    result = await session.execute(
-        select(WishList).where(WishList.status == "active")
-    )
+    stmt = select(WishList).where(WishList.status == "active")
+    if family_id is not None:
+        stmt = stmt.where(WishList.family_id == family_id)
+    if user_id is not None:
+        stmt = stmt.where(WishList.user_id == user_id)
+    result = await session.execute(stmt)
     wish_list = result.scalars().first()
     if wish_list is None:
         return None
@@ -89,12 +102,17 @@ async def get_active_wish_list(session: AsyncSession) -> dict | None:
 async def create_wish_list(
     session: AsyncSession,
     items: list[dict],
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
 ) -> dict:
     """Create a new wish list with items. S4.2
 
     Args:
         session: DB session
         items: List of dicts with keys: name, price (cents), verification_url (optional)
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: User ID for per-child wish list ownership.
 
     Returns:
         Dict with wish_list, items, and p_active.
@@ -107,12 +125,20 @@ async def create_wish_list(
 
     today = date.today()
 
-    logger.info("wishlist_creating", item_count=len(items))
-
-    # Check existing active list
-    existing = await session.execute(
-        select(WishList).where(WishList.status == "active")
+    logger.info(
+        "wishlist_creating",
+        item_count=len(items),
+        family_id=family_id,
+        user_id=user_id,
     )
+
+    # Check existing active list -- scoped to family + user
+    existing_stmt = select(WishList).where(WishList.status == "active")
+    if family_id is not None:
+        existing_stmt = existing_stmt.where(WishList.family_id == family_id)
+    if user_id is not None:
+        existing_stmt = existing_stmt.where(WishList.user_id == user_id)
+    existing = await session.execute(existing_stmt)
     existing_list = existing.scalars().first()
 
     if existing_list is not None:
@@ -130,15 +156,20 @@ async def create_wish_list(
     lock_until = _add_months(registered_at, 3)
     valid_until = _add_months(registered_at, 12)
 
-    wish_list = WishList(
-        status="active",
-        registered_at=registered_at,
-        lock_until=lock_until,
-        avg_price=stats["avg_price"],
-        max_price=stats["max_price"],
-        active_target_item_id=None,
-        valid_until=valid_until,
-    )
+    wl_kwargs: dict = {
+        "status": "active",
+        "registered_at": registered_at,
+        "lock_until": lock_until,
+        "avg_price": stats["avg_price"],
+        "max_price": stats["max_price"],
+        "active_target_item_id": None,
+        "valid_until": valid_until,
+    }
+    if family_id is not None:
+        wl_kwargs["family_id"] = family_id
+    if user_id is not None:
+        wl_kwargs["user_id"] = user_id
+    wish_list = WishList(**wl_kwargs)
     session.add(wish_list)
     await session.flush()  # Get wish_list.id
 
@@ -178,12 +209,17 @@ async def update_item_price(
     session: AsyncSession,
     item_id: int,
     new_price: int,
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
 ) -> WishItem:
     """Update an item's price. Limited to once per month per item. S4.2
 
     Args:
         item_id: Wish item ID
         new_price: New price in cents (must be > 0)
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: User ID for per-child validation.
 
     Returns:
         Updated WishItem.
@@ -201,10 +237,13 @@ async def update_item_price(
     if item is None:
         raise ValueError("愿望物品不存在")
 
-    # Check that the wish list is active
-    wl_result = await session.execute(
-        select(WishList).where(WishList.id == item.wish_list_id)
-    )
+    # Check that the wish list is active and belongs to the correct family/user
+    wl_stmt = select(WishList).where(WishList.id == item.wish_list_id)
+    if family_id is not None:
+        wl_stmt = wl_stmt.where(WishList.family_id == family_id)
+    if user_id is not None:
+        wl_stmt = wl_stmt.where(WishList.user_id == user_id)
+    wl_result = await session.execute(wl_stmt)
     wish_list = wl_result.scalars().first()
     if wish_list is None or wish_list.status != "active":
         raise ValueError("愿望清单不是活跃状态")
@@ -248,11 +287,20 @@ async def update_item_price(
 async def declare_target(
     session: AsyncSession,
     wish_item_id: int,
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
 ) -> dict:
     """Declare an item as the active target. S4.3
 
     Sets active_target_item_id on the active wish list.
     P_active becomes that item's current_price.
+
+    Args:
+        session: Database session.
+        wish_item_id: ID of the wish item to target.
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: User ID for per-child validation.
 
     Returns:
         Dict with wish_list and p_active.
@@ -260,9 +308,12 @@ async def declare_target(
     Raises:
         ValueError: If no active list, or item not in the active list.
     """
-    result = await session.execute(
-        select(WishList).where(WishList.status == "active")
-    )
+    stmt = select(WishList).where(WishList.status == "active")
+    if family_id is not None:
+        stmt = stmt.where(WishList.family_id == family_id)
+    if user_id is not None:
+        stmt = stmt.where(WishList.user_id == user_id)
+    result = await session.execute(stmt)
     wish_list = result.scalars().first()
     if wish_list is None:
         raise ValueError("没有活跃的愿望清单")
@@ -289,10 +340,20 @@ async def declare_target(
     }
 
 
-async def clear_target(session: AsyncSession) -> dict:
+async def clear_target(
+    session: AsyncSession,
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
+) -> dict:
     """Clear the active target. S4.3
 
     P_active reverts to max_price.
+
+    Args:
+        session: Database session.
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: User ID for per-child validation.
 
     Returns:
         Dict with wish_list and p_active.
@@ -300,9 +361,12 @@ async def clear_target(session: AsyncSession) -> dict:
     Raises:
         ValueError: If no active wish list.
     """
-    result = await session.execute(
-        select(WishList).where(WishList.status == "active")
-    )
+    stmt = select(WishList).where(WishList.status == "active")
+    if family_id is not None:
+        stmt = stmt.where(WishList.family_id == family_id)
+    if user_id is not None:
+        stmt = stmt.where(WishList.user_id == user_id)
+    result = await session.execute(stmt)
     wish_list = result.scalars().first()
     if wish_list is None:
         raise ValueError("没有活跃的愿望清单")

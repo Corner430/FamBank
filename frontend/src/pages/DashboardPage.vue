@@ -1,8 +1,26 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { api } from '../services/api'
-import { getStoredUser } from '../services/api'
+import { useRouter } from 'vue-router'
+import { api, getStoredUser, ApiError } from '../services/api'
 import AccountCard from '../components/AccountCard.vue'
+
+interface ChildSummary {
+  user_id: number
+  name: string | null
+  accounts: {
+    A: string
+    B_principal: string
+    B_interest_pool: string
+    C: string
+  }
+  total: string
+}
+
+interface DashboardData {
+  family_name: string
+  total_assets: string
+  children: ChildSummary[]
+}
 
 interface AccountInfo {
   type: string
@@ -14,130 +32,58 @@ interface AccountInfo {
   is_deposit_suspended?: boolean
 }
 
-interface PendingRedemption {
-  id: number
-  amount: string
-  fee: string
-  net: string
-  c_balance: string
-  reason: string
-  status: string
-  created_at: string
-}
-
-const accounts = ref<AccountInfo[]>([])
-const totalDebt = ref('0.00')
-const loading = ref(true)
-const error = ref('')
-
-// Redemption state
-const redeemAmount = ref('')
-const redeemReason = ref('')
-const redeemLoading = ref(false)
-const redeemError = ref('')
-const redeemResult = ref<{
-  status: string
-  amount: string
-  fee?: string
-  net?: string
-  c_balance_after?: string
-  a_balance_after?: string
-} | null>(null)
-
-// Pending requests from DB
-const pendingRequests = ref<PendingRedemption[]>([])
-const pendingLoading = ref(false)
-
-// Approval state (parent)
-const approveLoading = ref(false)
-const approveError = ref('')
-
+const router = useRouter()
 const user = computed(() => getStoredUser())
 const isParent = computed(() => user.value?.role === 'parent')
 
-const cAccount = computed(() => accounts.value.find(a => a.type === 'C'))
-const aAccount = computed(() => accounts.value.find(a => a.type === 'A'))
+// Parent dashboard state
+const dashboard = ref<DashboardData | null>(null)
+const dashboardLoading = ref(false)
+const dashboardError = ref('')
 
-// A Spending state
+// Child account state (for child view)
+const accounts = ref<AccountInfo[]>([])
+const totalDebt = ref('0.00')
+const childLoading = ref(false)
+const childError = ref('')
+
+// A Spending state (child)
 const spendAmount = ref('')
 const spendDesc = ref('')
 const spendLoading = ref(false)
 const spendError = ref('')
-const spendResult = ref<{
-  amount: string
-  balance_before: string
-  balance_after: string
-} | null>(null)
+const spendResult = ref<{ amount: string; balance_before: string; balance_after: string } | null>(null)
 
-async function loadAccounts() {
-  loading.value = true
-  error.value = ''
+// Redemption state (child)
+const redeemAmount = ref('')
+const redeemReason = ref('')
+const redeemLoading = ref(false)
+const redeemError = ref('')
+const redeemSuccess = ref(false)
+
+async function loadParentDashboard() {
+  dashboardLoading.value = true
+  dashboardError.value = ''
+  try {
+    dashboard.value = await api.get<DashboardData>('/family/dashboard')
+  } catch (e) {
+    dashboardError.value = e instanceof ApiError ? e.message : '加载失败'
+  } finally {
+    dashboardLoading.value = false
+  }
+}
+
+async function loadChildAccounts() {
+  childLoading.value = true
+  childError.value = ''
   try {
     const res = await api.get<{ accounts: AccountInfo[]; total_debt: string }>('/accounts')
     accounts.value = res.accounts
     totalDebt.value = res.total_debt
-  } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : '加载失败'
+  } catch (e) {
+    childError.value = e instanceof ApiError ? e.message : '加载失败'
   } finally {
-    loading.value = false
-  }
-}
-
-async function loadPendingRedemptions() {
-  pendingLoading.value = true
-  try {
-    const res = await api.get<{ requests: PendingRedemption[] }>('/accounts/c/redemption/pending')
-    pendingRequests.value = res.requests
-  } catch {
-    // silently ignore – pending list is supplementary
-    pendingRequests.value = []
-  } finally {
-    pendingLoading.value = false
-  }
-}
-
-async function requestRedemption() {
-  redeemLoading.value = true
-  redeemError.value = ''
-  redeemResult.value = null
-  try {
-    await api.post<PendingRedemption>('/accounts/c/redemption/request', {
-      amount: redeemAmount.value,
-      reason: redeemReason.value,
-    })
-    redeemAmount.value = ''
-    redeemReason.value = ''
-    await loadPendingRedemptions()
-  } catch (e: unknown) {
-    redeemError.value = e instanceof Error ? e.message : '请求失败'
-  } finally {
-    redeemLoading.value = false
-  }
-}
-
-async function handleApproval(id: number, approved: boolean) {
-  approveLoading.value = true
-  approveError.value = ''
-  redeemResult.value = null
-  try {
-    const res = await api.post<{
-      id: number
-      status: string
-      amount: string
-      fee?: string
-      net?: string
-      c_balance_after?: string
-      a_balance_after?: string
-    }>('/accounts/c/redemption/approve', {
-      id,
-      approved,
-    })
-    redeemResult.value = res
-    await Promise.all([loadAccounts(), loadPendingRedemptions()])
-  } catch (e: unknown) {
-    approveError.value = e instanceof Error ? e.message : '审批失败'
-  } finally {
-    approveLoading.value = false
+    childLoading.value = false
   }
 }
 
@@ -146,231 +92,196 @@ async function spendFromA() {
   spendError.value = ''
   spendResult.value = null
   try {
-    const res = await api.post<{
-      amount: string
-      balance_before: string
-      balance_after: string
-    }>('/accounts/a/spend', {
+    spendResult.value = await api.post('/accounts/a/spend', {
       amount: spendAmount.value,
       description: spendDesc.value,
     })
-    spendResult.value = res
     spendAmount.value = ''
     spendDesc.value = ''
-    await loadAccounts()
-  } catch (e: unknown) {
-    spendError.value = e instanceof Error ? e.message : '消费失败'
+    await loadChildAccounts()
+  } catch (e) {
+    spendError.value = e instanceof ApiError ? e.message : '消费失败'
   } finally {
     spendLoading.value = false
   }
 }
 
-function formatTime(iso: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleString('zh-CN')
+async function requestRedemption() {
+  redeemLoading.value = true
+  redeemError.value = ''
+  redeemSuccess.value = false
+  try {
+    await api.post('/accounts/c/redemption/request', {
+      amount: redeemAmount.value,
+      reason: redeemReason.value,
+    })
+    redeemAmount.value = ''
+    redeemReason.value = ''
+    redeemSuccess.value = true
+    await loadChildAccounts()
+  } catch (e) {
+    redeemError.value = e instanceof ApiError ? e.message : '申请失败'
+  } finally {
+    redeemLoading.value = false
+  }
+}
+
+function goToChild(childId: number) {
+  router.push(`/child/${childId}`)
 }
 
 onMounted(() => {
-  loadAccounts()
-  loadPendingRedemptions()
+  if (isParent.value) {
+    loadParentDashboard()
+  } else {
+    loadChildAccounts()
+  }
 })
 </script>
 
 <template>
   <div class="dashboard">
-    <h1>账户总览</h1>
+    <!-- Parent Dashboard -->
+    <template v-if="isParent">
+      <h1>家庭总览</h1>
 
-    <p v-if="loading">加载中...</p>
-    <p v-else-if="error" class="error">{{ error }}</p>
+      <p v-if="dashboardLoading">加载中...</p>
+      <p v-else-if="dashboardError" class="error">{{ dashboardError }}</p>
 
-    <div v-else class="accounts-grid">
-      <AccountCard
-        v-for="acc in accounts"
-        :key="acc.type"
-        :type="acc.type"
-        :name="acc.name"
-        :balance="acc.balance"
-        :principal="acc.principal"
-        :interest-pool="acc.interest_pool"
-        :is-interest-suspended="acc.is_interest_suspended"
-        :is-deposit-suspended="acc.is_deposit_suspended"
-      />
-    </div>
-
-    <div v-if="totalDebt !== '0.00'" class="debt-notice">
-      欠款余额：&yen;{{ totalDebt }}
-    </div>
-
-    <!-- A Spending Section -->
-    <div class="section-card" v-if="aAccount">
-      <h2>A 零钱宝消费</h2>
-      <div class="redeem-form">
-        <div class="form-row">
-          <label>消费金额 (元)</label>
-          <input
-            v-model="spendAmount"
-            type="text"
-            placeholder="例如 50.00"
-            :disabled="spendLoading"
-          />
+      <template v-else-if="dashboard">
+        <div class="family-summary">
+          <span class="family-name">{{ dashboard.family_name }}</span>
+          <span class="total-assets">总资产：&yen;{{ dashboard.total_assets }}</span>
         </div>
-        <div class="form-row">
-          <label>消费说明 (选填)</label>
-          <input
-            v-model="spendDesc"
-            type="text"
-            placeholder="消费说明"
-            :disabled="spendLoading"
-          />
+
+        <div v-if="dashboard.children.length === 0" class="empty-state">
+          还没有孩子加入，请生成邀请码邀请成员
         </div>
-        <button
-          class="btn btn-spend"
-          @click="spendFromA"
-          :disabled="spendLoading || !spendAmount"
-        >
-          {{ spendLoading ? '处理中...' : '确认消费' }}
-        </button>
+
+        <div v-else class="children-grid">
+          <div
+            v-for="child in dashboard.children"
+            :key="child.user_id"
+            class="child-card"
+            @click="goToChild(child.user_id)"
+          >
+            <div class="child-name">{{ child.name || '未命名' }}</div>
+            <div class="child-accounts">
+              <div class="acct-row"><span>A 零钱宝</span><span>&yen;{{ child.accounts.A }}</span></div>
+              <div class="acct-row"><span>B 梦想金</span><span>&yen;{{ child.accounts.B_principal }}</span></div>
+              <div class="acct-row sub"><span>利息池</span><span>&yen;{{ child.accounts.B_interest_pool }}</span></div>
+              <div class="acct-row"><span>C 牛马金</span><span>&yen;{{ child.accounts.C }}</span></div>
+            </div>
+            <div class="child-total">合计：&yen;{{ child.total }}</div>
+          </div>
+        </div>
+      </template>
+    </template>
+
+    <!-- Child Dashboard -->
+    <template v-else>
+      <h1>我的账户</h1>
+
+      <p v-if="childLoading">加载中...</p>
+      <p v-else-if="childError" class="error">{{ childError }}</p>
+
+      <div v-else class="accounts-grid">
+        <AccountCard
+          v-for="acc in accounts"
+          :key="acc.type"
+          :type="acc.type"
+          :name="acc.name"
+          :balance="acc.balance"
+          :principal="acc.principal"
+          :interest-pool="acc.interest_pool"
+          :is-interest-suspended="acc.is_interest_suspended"
+          :is-deposit-suspended="acc.is_deposit_suspended"
+        />
+      </div>
+
+      <div v-if="totalDebt !== '0.00'" class="debt-notice">
+        欠款余额：&yen;{{ totalDebt }}
+      </div>
+
+      <!-- A Spending (child) -->
+      <div class="section-card">
+        <h2>A 零钱宝消费</h2>
+        <div class="inline-form">
+          <input v-model="spendAmount" type="text" inputmode="decimal" placeholder="金额" :disabled="spendLoading" />
+          <input v-model="spendDesc" type="text" placeholder="说明（选填）" :disabled="spendLoading" />
+          <button @click="spendFromA" :disabled="spendLoading || !spendAmount">
+            {{ spendLoading ? '...' : '消费' }}
+          </button>
+        </div>
         <p v-if="spendError" class="error">{{ spendError }}</p>
-      </div>
-      <div v-if="spendResult" class="result-card approved">
-        <h3>消费成功</h3>
-        <div class="detail-row">
-          <span>消费金额：</span><span>&yen;{{ spendResult.amount }}</span>
-        </div>
-        <div class="detail-row">
-          <span>变动前余额：</span><span>&yen;{{ spendResult.balance_before }}</span>
-        </div>
-        <div class="detail-row">
-          <span>变动后余额：</span><span class="highlight">&yen;{{ spendResult.balance_after }}</span>
+        <div v-if="spendResult" class="result-msg">
+          消费 &yen;{{ spendResult.amount }}，余额 &yen;{{ spendResult.balance_after }}
         </div>
       </div>
-    </div>
 
-    <!-- C Redemption Section -->
-    <div class="section-card" v-if="cAccount">
-      <h2>C账户赎回</h2>
-
-      <!-- Request Form -->
-      <div class="redeem-form">
-        <div class="form-row">
-          <label>赎回金额 (元)</label>
-          <input
-            v-model="redeemAmount"
-            type="text"
-            placeholder="例如 500.00"
-            :disabled="redeemLoading"
-          />
+      <!-- C Redemption Request (child) -->
+      <div class="section-card">
+        <h2>C 牛马金赎回申请</h2>
+        <div class="inline-form">
+          <input v-model="redeemAmount" type="text" inputmode="decimal" placeholder="金额" :disabled="redeemLoading" />
+          <input v-model="redeemReason" type="text" placeholder="原因（选填）" :disabled="redeemLoading" />
+          <button @click="requestRedemption" :disabled="redeemLoading || !redeemAmount">
+            {{ redeemLoading ? '...' : '申请' }}
+          </button>
         </div>
-        <div class="form-row">
-          <label>原因 (选填)</label>
-          <input
-            v-model="redeemReason"
-            type="text"
-            placeholder="赎回原因"
-            :disabled="redeemLoading"
-          />
-        </div>
-        <button
-          class="btn btn-primary"
-          @click="requestRedemption"
-          :disabled="redeemLoading || !redeemAmount"
-        >
-          {{ redeemLoading ? '提交中...' : '申请赎回' }}
-        </button>
         <p v-if="redeemError" class="error">{{ redeemError }}</p>
+        <p v-if="redeemSuccess" class="result-msg">赎回申请已提交</p>
       </div>
-
-      <!-- Pending Requests List -->
-      <div v-if="pendingRequests.length > 0" class="pending-list">
-        <h3>待审批赎回请求</h3>
-        <div
-          v-for="req in pendingRequests"
-          :key="req.id"
-          class="pending-card"
-        >
-          <div class="detail-row">
-            <span>赎回金额：</span><span>&yen;{{ req.amount }}</span>
-          </div>
-          <div class="detail-row">
-            <span>手续费 (10%)：</span><span>&yen;{{ req.fee }}</span>
-          </div>
-          <div class="detail-row">
-            <span>实际到账：</span><span class="highlight">&yen;{{ req.net }}</span>
-          </div>
-          <div class="detail-row">
-            <span>C当前余额：</span><span>&yen;{{ req.c_balance }}</span>
-          </div>
-          <div v-if="req.reason" class="detail-row">
-            <span>原因：</span><span>{{ req.reason }}</span>
-          </div>
-          <div class="detail-row">
-            <span>申请时间：</span><span>{{ formatTime(req.created_at) }}</span>
-          </div>
-
-          <!-- Parent Approve/Reject -->
-          <div v-if="isParent" class="approval-panel">
-            <button
-              class="btn btn-approve"
-              @click="handleApproval(req.id, true)"
-              :disabled="approveLoading"
-            >
-              批准
-            </button>
-            <button
-              class="btn btn-reject"
-              @click="handleApproval(req.id, false)"
-              :disabled="approveLoading"
-            >
-              拒绝
-            </button>
-          </div>
-          <p v-else class="info-text">等待甲方审批...</p>
-        </div>
-        <p v-if="approveError" class="error">{{ approveError }}</p>
-      </div>
-
-      <!-- Result -->
-      <div v-if="redeemResult" class="result-card" :class="redeemResult.status">
-        <h3>{{ redeemResult.status === 'approved' ? '赎回成功' : '赎回被拒绝' }}</h3>
-        <div v-if="redeemResult.status === 'approved'">
-          <div class="detail-row">
-            <span>赎回金额：</span><span>&yen;{{ redeemResult.amount }}</span>
-          </div>
-          <div class="detail-row">
-            <span>手续费：</span><span>&yen;{{ redeemResult.fee }}</span>
-          </div>
-          <div class="detail-row">
-            <span>到账A：</span><span class="highlight">&yen;{{ redeemResult.net }}</span>
-          </div>
-          <div class="detail-row">
-            <span>C余额：</span><span>&yen;{{ redeemResult.c_balance_after }}</span>
-          </div>
-          <div class="detail-row">
-            <span>A余额：</span><span>&yen;{{ redeemResult.a_balance_after }}</span>
-          </div>
-        </div>
-        <div v-else>
-          <p>金额：&yen;{{ redeemResult.amount }}</p>
-        </div>
-      </div>
-    </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.dashboard h1 {
+.dashboard h1 { margin-bottom: 24px; }
+
+.family-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 24px;
+  padding: 16px;
+  background: #f0f7ff;
+  border-radius: 8px;
 }
+.family-name { font-size: 1.2em; font-weight: 600; }
+.total-assets { font-size: 1.1em; color: #4a90d9; font-weight: 500; }
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+}
+
+.children-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.child-card {
+  padding: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+.child-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+.child-name { font-size: 1.1em; font-weight: 600; margin-bottom: 12px; }
+.child-accounts { margin-bottom: 8px; }
+.acct-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 0.9em; }
+.acct-row.sub { padding-left: 16px; color: #888; font-size: 0.85em; }
+.child-total { text-align: right; font-weight: 600; color: #4a90d9; border-top: 1px solid #eee; padding-top: 8px; }
 
 .accounts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
-}
-
-.error {
-  color: #e74c3c;
 }
 
 .debt-notice {
@@ -382,144 +293,36 @@ onMounted(() => {
 }
 
 .section-card {
-  margin-top: 24px;
-  padding: 20px;
+  margin-top: 20px;
+  padding: 16px;
   border: 1px solid #e0e0e0;
   border-radius: 8px;
   background: white;
 }
+.section-card h2 { margin-bottom: 12px; font-size: 1em; }
 
-.section-card h2 {
-  margin-bottom: 16px;
-  font-size: 1.2em;
-}
-
-.redeem-form {
-  margin-bottom: 16px;
-}
-
-.form-row {
+.inline-form {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 8px;
 }
-
-.form-row label {
-  min-width: 110px;
-  color: #555;
-  font-size: 0.9em;
-}
-
-.form-row input {
-  flex: 1;
+.inline-form input {
   padding: 8px 12px;
   border: 1px solid #ccc;
   border-radius: 4px;
-  font-size: 0.95em;
+  font-size: 0.9em;
+  flex: 1;
 }
-
-.btn {
-  padding: 8px 20px;
+.inline-form button {
+  padding: 8px 16px;
+  background: #4a90d9;
+  color: white;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 0.95em;
+  white-space: nowrap;
 }
+.inline-form button:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: #2196f3;
-  color: white;
-}
-
-.btn-spend {
-  background: #4caf50;
-  color: white;
-}
-
-.btn-approve {
-  background: #4caf50;
-  color: white;
-}
-
-.btn-reject {
-  background: #e74c3c;
-  color: white;
-}
-
-.pending-list {
-  margin-top: 16px;
-}
-
-.pending-list h3 {
-  margin-bottom: 12px;
-  color: #e65100;
-}
-
-.pending-card {
-  margin-bottom: 12px;
-  padding: 16px;
-  border: 2px solid #ff9800;
-  border-radius: 8px;
-  background: #fff8e1;
-}
-
-.pending-card h3 {
-  margin-bottom: 12px;
-  color: #e65100;
-}
-
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 4px 0;
-  font-size: 0.95em;
-}
-
-.highlight {
-  font-weight: bold;
-  color: #2e7d32;
-}
-
-.approval-panel {
-  display: flex;
-  gap: 12px;
-  margin-top: 16px;
-  align-items: center;
-}
-
-.info-text {
-  margin-top: 12px;
-  color: #888;
-  font-style: italic;
-}
-
-.result-card {
-  margin-top: 16px;
-  padding: 16px;
-  border-radius: 8px;
-}
-
-.result-card.approved {
-  border: 2px solid #4caf50;
-  background: #e8f5e9;
-}
-
-.result-card.approved h3 {
-  color: #2e7d32;
-}
-
-.result-card.rejected {
-  border: 2px solid #e74c3c;
-  background: #ffebee;
-}
-
-.result-card.rejected h3 {
-  color: #c62828;
-}
+.error { color: #e74c3c; margin-top: 8px; }
+.result-msg { color: #2e7d32; margin-top: 8px; }
 </style>

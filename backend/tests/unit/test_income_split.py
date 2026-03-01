@@ -4,7 +4,6 @@ Tests: 100元, 0.01元 tail-diff, negative input rejection.
 Charter reference: §2 (收入入账与自动分流)
 """
 
-from decimal import Decimal
 
 import pytest
 

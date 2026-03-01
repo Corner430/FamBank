@@ -3,7 +3,6 @@
 import os
 from decimal import Decimal
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import text
@@ -63,14 +62,9 @@ async def _setup_schema(engine):
             await conn.execute(text(f"DROP TABLE IF EXISTS `{table_name}`"))
         await conn.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
 
-        # Create tables
+        # Create tables and triggers from init.sql (consolidated V2 schema)
         init_sql = (migrations_dir / "init.sql").read_text(encoding="utf-8")
-        for statement in _split_sql(init_sql):
-            await conn.execute(text(statement))
-
-        # Create triggers
-        triggers_sql = (migrations_dir / "triggers.sql").read_text(encoding="utf-8")
-        for statement in _split_sql_triggers(triggers_sql):
+        for statement in _split_sql_triggers(init_sql):
             await conn.execute(text(statement))
 
 
@@ -78,10 +72,10 @@ async def _clean_tables(session: AsyncSession):
     """Truncate all tables and recreate triggers for a clean test."""
     await session.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
     tables = [
-        "redemption_request",
-        "escrow", "debt", "announcement", "config",
+        "refresh_token", "sms_code", "invitation",
+        "redemption_request", "escrow", "debt", "announcement", "config",
         "violation", "wish_item", "wish_list",
-        "transaction_log", "settlement", "account", "user",
+        "transaction_log", "settlement", "account", "user", "family",
     ]
     # Drop triggers so we can truncate transaction_log
     await session.execute(text("DROP TRIGGER IF EXISTS trg_transaction_log_no_update"))
@@ -116,28 +110,78 @@ async def _clean_tables(session: AsyncSession):
 
 
 @pytest_asyncio.fixture
-async def seeded_accounts(db_session: AsyncSession):
-    """Seed the 3 accounts (A/B/C) with zero balance."""
-    await db_session.execute(text("""
-        INSERT INTO account (account_type, display_name, balance, interest_pool)
-        VALUES ('A', '零钱宝', 0, 0), ('B', '梦想金', 0, 0), ('C', '牛马金', 0, 0)
-    """))
+async def seeded_family(db_session: AsyncSession):
+    """Create a family with a parent user and return context."""
+    from app.auth import create_access_token
+
+    # Circular FK: family.created_by → user.id AND user.family_id → family.id
+    # Resolve by: 1) create user without family_id, 2) create family, 3) update user
+    await db_session.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+    await db_session.execute(text(
+        "INSERT INTO `user` (id, phone, role, name) "
+        "VALUES (1, '13800000001', 'parent', '家长')"
+    ))
+    await db_session.execute(text(
+        "INSERT INTO family (id, name, created_by) VALUES (1, '测试家庭', 1)"
+    ))
+    await db_session.execute(text(
+        "UPDATE `user` SET family_id = 1 WHERE id = 1"
+    ))
+    await db_session.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
     await db_session.commit()
-    return db_session
+
+    token = create_access_token(user_id=1, family_id=1, role="parent")
+    return {
+        "session": db_session,
+        "family_id": 1,
+        "parent_id": 1,
+        "parent_token": token,
+        "auth_header": {"Authorization": f"Bearer {token}"},
+    }
 
 
 @pytest_asyncio.fixture
-async def seeded_config(db_session: AsyncSession):
-    """Seed default config values."""
-    import pathlib
+async def seeded_child(seeded_family):
+    """Add a child user with A/B/C accounts to the family."""
+    from app.auth import create_access_token
 
-    seed_sql = (
-        pathlib.Path(__file__).parent.parent / "app" / "migrations" / "seed.sql"
-    ).read_text(encoding="utf-8")
-    for statement in _split_sql(seed_sql):
-        await db_session.execute(text(statement))
-    await db_session.commit()
-    return db_session
+    session = seeded_family["session"]
+    # Create child user
+    await session.execute(text(
+        "INSERT INTO user (id, phone, family_id, role, name) "
+        "VALUES (2, '13800000002', 1, 'child', '孩子A')"
+    ))
+    # Create A/B/C accounts for child
+    await session.execute(text(
+        "INSERT INTO account"
+        " (account_type, display_name, balance, interest_pool, family_id, user_id)"
+        " VALUES ('A', '零钱宝', 0, 0, 1, 2),"
+        " ('B', '梦想金', 0, 0, 1, 2),"
+        " ('C', '牛马金', 0, 0, 1, 2)"
+    ))
+    await session.commit()
+
+    child_token = create_access_token(user_id=2, family_id=1, role="child")
+    return {
+        **seeded_family,
+        "child_id": 2,
+        "child_token": child_token,
+        "child_auth_header": {"Authorization": f"Bearer {child_token}"},
+    }
+
+
+@pytest_asyncio.fixture
+async def seeded_accounts(seeded_child):
+    """Backwards-compatible: returns session with family, parent, child, and accounts."""
+    return seeded_child["session"]
+
+
+@pytest_asyncio.fixture
+async def seeded_config(seeded_child):
+    """Seed default config values for the family."""
+    from app.services.config import init_default_config
+    await init_default_config(family_id=1, session=seeded_child["session"])
+    return seeded_child["session"]
 
 
 @pytest_asyncio.fixture
@@ -169,7 +213,9 @@ async def async_client(seeded_all):
 def assert_cents(actual: int, expected_yuan: str, msg: str = ""):
     """Assert integer cents equals expected yuan string."""
     expected_cents = int(Decimal(expected_yuan) * 100)
-    assert actual == expected_cents, f"{msg}: expected {expected_yuan} ({expected_cents}¢), got {actual}¢"
+    assert actual == expected_cents, (
+        f"{msg}: expected {expected_yuan} ({expected_cents}¢), got {actual}¢"
+    )
 
 
 def _split_sql(sql: str) -> list[str]:

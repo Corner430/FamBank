@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { api } from '../services/api'
+import { api, ApiError } from '../services/api'
 
 interface ConfigItem {
   key: string
@@ -59,18 +59,21 @@ async function loadConfig() {
     const res = await api.get<{ configs: ConfigItem[] }>('/config')
     configs.value = res.configs
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : '加载配置失败'
+    error.value = e instanceof ApiError ? e.message : '加载配置失败'
   } finally {
     loading.value = false
   }
 }
 
+const announcementError = ref('')
+
 async function loadAnnouncements() {
+  announcementError.value = ''
   try {
     const res = await api.get<{ announcements: AnnouncementItem[] }>('/config/announcements')
     announcements.value = res.announcements
   } catch {
-    // Silently ignore announcement loading errors
+    announcementError.value = '加载公告失败'
   }
 }
 
@@ -91,7 +94,7 @@ async function submitChange() {
     changeReason.value = ''
     await loadAnnouncements()
   } catch (e: unknown) {
-    submitError.value = e instanceof Error ? e.message : '提交失败'
+    submitError.value = e instanceof ApiError ? e.message : '提交失败'
   } finally {
     submitting.value = false
   }
@@ -194,7 +197,8 @@ onMounted(() => {
     <!-- Announcement History -->
     <section class="section-card">
       <h2>公告历史</h2>
-      <p v-if="announcements.length === 0" class="empty-text">暂无公告</p>
+      <p v-if="announcementError" class="error-text">{{ announcementError }}</p>
+      <p v-else-if="announcements.length === 0" class="empty-text">暂无公告</p>
       <table v-else class="config-table">
         <thead>
           <tr>
@@ -356,5 +360,10 @@ onMounted(() => {
 .empty-text {
   color: #aaa;
   font-style: italic;
+}
+
+.error-text {
+  color: #e74c3c;
+  font-size: 0.9em;
 }
 </style>

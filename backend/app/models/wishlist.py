@@ -12,6 +12,8 @@ class WishList(Base):
     __tablename__ = "wish_list"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("family.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user.id"), nullable=False)
     status: Mapped[str] = mapped_column(
         Enum("active", "expired", "replaced"), nullable=False
     )

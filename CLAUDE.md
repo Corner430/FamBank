@@ -9,6 +9,7 @@ Auto-generated from all feature plans. Last updated: 2026-02-28
 - structlog: 结构化 JSON 日志，所有 service 和 HTTP 请求均覆盖
 - pytest (backend), Vitest (frontend) (001-fambank-core)
 - systemd (进程管理), GitHub Actions (CI/CD)
+- Python 3.12 (backend, managed by uv), TypeScript (frontend) + FastAPI, Pydantic, uvicorn, aiomysql/SQLAlchemy, PyJWT, Vue 3, Vue Router, Vite (002-multi-tenant-platform)
 
 ## Project Structure
 
@@ -63,11 +64,9 @@ journalctl -u fambank -f            # 查看日志
 - CI/CD: 推送 main 分支自动触发 test + deploy
 
 ## Recent Changes
+- 002-multi-tenant-platform: Added Python 3.12 (backend, managed by uv), TypeScript (frontend) + FastAPI, Pydantic, uvicorn, aiomysql/SQLAlchemy, PyJWT, Vue 3, Vue Router, Vite
 - 001-fambank-core: Python 3.12 + FastAPI + MySQL 8.0 + Vue 3 + uv
 - structlog 结构化 JSON 日志，覆盖全部 service 和 HTTP 请求
-- systemd 服务（自动重启）+ GitHub Actions CI/CD（test + deploy → main）
-- C 赎回审批持久化：新增 redemption_request 表，request/approve/reject 全部写库，前端从 API 加载 pending 列表
-- JWT_SECRET_KEY 改为环境变量配置（auth.py），生产环境必须在 .env 中设置
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->

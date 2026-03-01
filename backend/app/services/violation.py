@@ -21,6 +21,9 @@ async def process_violation(
     violation_amount: int,
     amount_entered_a: int,
     description: str = "",
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
 ) -> dict:
     """Process a violation: calculate penalty, transfer, check escalation.
 
@@ -29,6 +32,8 @@ async def process_violation(
         violation_amount: The violation amount in cents.
         amount_entered_a: How much of the violation entered A account (for settlement step 4).
         description: Violation description.
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: Acting user ID for audit trail.
 
     Returns:
         Dict with violation details (penalty, escalated, balances).
@@ -46,12 +51,17 @@ async def process_violation(
         violation_amount=violation_amount,
         amount_entered_a=amount_entered_a,
         description=description,
+        family_id=family_id,
+        user_id=user_id,
     )
 
-    # Load accounts
-    result = await session.execute(
-        select(Account).order_by(Account.account_type)
-    )
+    # Load accounts -- filter by family_id and user_id for tenant isolation
+    stmt = select(Account).order_by(Account.account_type)
+    if family_id is not None:
+        stmt = stmt.where(Account.family_id == family_id)
+    if user_id is not None:
+        stmt = stmt.where(Account.user_id == user_id)
+    result = await session.execute(stmt)
     accounts = {a.account_type: a for a in result.scalars().all()}
 
     if len(accounts) < 3:
@@ -67,6 +77,13 @@ async def process_violation(
         "violation_penalty_calculated", penalty=penalty,
         b_interest_pool=account_b.interest_pool,
     )
+
+    # Common kwargs for TransactionLog tenant fields
+    tx_tenant = {}
+    if family_id is not None:
+        tx_tenant["family_id"] = family_id
+    if user_id is not None:
+        tx_tenant["user_id"] = user_id
 
     # Transfer penalty from B interest_pool to C
     b_pool_before = account_b.interest_pool
@@ -86,6 +103,7 @@ async def process_violation(
             balance_after=account_b.interest_pool,
             charter_clause="第7条",
             description=f"违约罚金：{description}",
+            **tx_tenant,
         ))
 
         session.add(TransactionLog(
@@ -97,17 +115,21 @@ async def process_violation(
             balance_after=account_c.balance,
             charter_clause="第7条",
             description=f"违约罚金入C：{description}",
+            **tx_tenant,
         ))
 
-    # Check escalation: 2nd violation in 12 months
+    # Check escalation: 2nd violation in 12 months -- scoped to family
     today = date.today()
     twelve_months_ago = today - timedelta(days=365)
 
-    count_result = await session.execute(
-        select(func.count(Violation.id)).where(
-            Violation.violation_date >= twelve_months_ago
-        )
+    escalation_stmt = select(func.count(Violation.id)).where(
+        Violation.violation_date >= twelve_months_ago
     )
+    if family_id is not None:
+        escalation_stmt = escalation_stmt.where(Violation.family_id == family_id)
+    if user_id is not None:
+        escalation_stmt = escalation_stmt.where(Violation.user_id == user_id)
+    count_result = await session.execute(escalation_stmt)
     recent_violations = count_result.scalar_one()
 
     # This is the new violation (not yet saved), so if recent count >= 1
@@ -125,15 +147,20 @@ async def process_violation(
             deposit_suspend_until=str(account_b.deposit_suspend_until),
         )
 
-    # Create Violation record
-    violation = Violation(
-        violation_date=today,
-        violation_amount=violation_amount,
-        penalty_amount=penalty,
-        amount_entered_a=amount_entered_a,
-        is_escalated=is_escalated,
-        description=description,
-    )
+    # Create Violation record with tenant fields
+    violation_kwargs: dict = {
+        "violation_date": today,
+        "violation_amount": violation_amount,
+        "penalty_amount": penalty,
+        "amount_entered_a": amount_entered_a,
+        "is_escalated": is_escalated,
+        "description": description,
+    }
+    if family_id is not None:
+        violation_kwargs["family_id"] = family_id
+    if user_id is not None:
+        violation_kwargs["user_id"] = user_id
+    violation = Violation(**violation_kwargs)
     session.add(violation)
 
     await session.flush()

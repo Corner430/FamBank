@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AnyUser, ParentUser
+from app.api.deps import ChildId, FamilyContext, ParentContext
 from app.database import get_db
 from app.schemas.common import cents_to_yuan, yuan_to_cents
 from app.schemas.wishlist import (
@@ -53,11 +53,16 @@ def _wishlist_to_response(wish_list, items, p_active: int) -> WishListResponse:
 
 @router.get("/wishlist", response_model=WishListResponse | None)
 async def get_wishlist(
-    user: AnyUser,
+    child_id_resolved: ChildId,
+    ctx: FamilyContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Get current active wish list with items. §4.2"""
-    result = await get_active_wish_list(db)
+    result = await get_active_wish_list(
+        db,
+        family_id=ctx.family_id,
+        user_id=child_id_resolved,
+    )
     if result is None:
         return None
 
@@ -69,7 +74,8 @@ async def get_wishlist(
 @router.post("/wishlist", response_model=WishListResponse)
 async def create_wishlist(
     req: WishListCreateRequest,
-    user: ParentUser,
+    child_id_resolved: ChildId,
+    ctx: ParentContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new wish list with items. §4.2"""
@@ -91,7 +97,11 @@ async def create_wishlist(
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        result = await create_wish_list(db, items_data)
+        result = await create_wish_list(
+            db, items_data,
+            family_id=ctx.family_id,
+            user_id=child_id_resolved,
+        )
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -105,7 +115,8 @@ async def create_wishlist(
 async def update_item_price_endpoint(
     item_id: int,
     req: WishItemPriceUpdate,
-    user: AnyUser,
+    child_id_resolved: ChildId,
+    ctx: FamilyContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Update a wish item's price. Once per month per item. §4.2"""
@@ -115,7 +126,11 @@ async def update_item_price_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        item = await update_item_price(db, item_id, new_price_cents)
+        item = await update_item_price(
+            db, item_id, new_price_cents,
+            family_id=ctx.family_id,
+            user_id=child_id_resolved,
+        )
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -126,12 +141,17 @@ async def update_item_price_endpoint(
 @router.post("/wishlist/declare-target", response_model=WishListTargetResponse)
 async def declare_target_endpoint(
     req: DeclareTargetRequest,
-    user: AnyUser,
+    child_id_resolved: ChildId,
+    ctx: FamilyContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Declare a wish item as the active target. §4.3"""
     try:
-        result = await declare_target(db, req.wish_item_id)
+        result = await declare_target(
+            db, req.wish_item_id,
+            family_id=ctx.family_id,
+            user_id=child_id_resolved,
+        )
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -144,12 +164,17 @@ async def declare_target_endpoint(
 
 @router.delete("/wishlist/declare-target", response_model=WishListTargetResponse)
 async def clear_target_endpoint(
-    user: AnyUser,
+    child_id_resolved: ChildId,
+    ctx: FamilyContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Clear the active target. P_active reverts to max_price. §4.3"""
     try:
-        result = await clear_target(db)
+        result = await clear_target(
+            db,
+            family_id=ctx.family_id,
+            user_id=child_id_resolved,
+        )
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

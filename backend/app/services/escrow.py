@@ -16,32 +16,63 @@ from app.models.escrow import Escrow
 logger = structlog.get_logger("escrow")
 
 
-async def get_pending_escrow_total(session: AsyncSession) -> int:
-    """Get total amount of pending (unreleased) escrow funds in cents."""
-    result = await session.execute(
-        select(func.coalesce(func.sum(Escrow.amount), 0)).where(
-            Escrow.status == "pending"
-        )
+async def get_pending_escrow_total(
+    session: AsyncSession,
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
+) -> int:
+    """Get total amount of pending (unreleased) escrow funds in cents.
+
+    Args:
+        session: Database session.
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: User ID for per-child filtering.
+    """
+    stmt = select(func.coalesce(func.sum(Escrow.amount), 0)).where(
+        Escrow.status == "pending"
     )
+    if family_id is not None:
+        stmt = stmt.where(Escrow.family_id == family_id)
+    if user_id is not None:
+        stmt = stmt.where(Escrow.user_id == user_id)
+    result = await session.execute(stmt)
     return result.scalar() or 0
 
 
-async def get_escrow_summary(session: AsyncSession) -> dict:
-    """Get escrow summary: pending count, pending total, released total."""
-    pending = await session.execute(
-        select(
-            func.count(Escrow.id),
-            func.coalesce(func.sum(Escrow.amount), 0),
-        ).where(Escrow.status == "pending")
-    )
+async def get_escrow_summary(
+    session: AsyncSession,
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
+) -> dict:
+    """Get escrow summary: pending count, pending total, released total.
+
+    Args:
+        session: Database session.
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: User ID for per-child filtering.
+    """
+    pending_stmt = select(
+        func.count(Escrow.id),
+        func.coalesce(func.sum(Escrow.amount), 0),
+    ).where(Escrow.status == "pending")
+    if family_id is not None:
+        pending_stmt = pending_stmt.where(Escrow.family_id == family_id)
+    if user_id is not None:
+        pending_stmt = pending_stmt.where(Escrow.user_id == user_id)
+    pending = await session.execute(pending_stmt)
     pending_row = pending.one()
 
-    released = await session.execute(
-        select(
-            func.count(Escrow.id),
-            func.coalesce(func.sum(Escrow.amount), 0),
-        ).where(Escrow.status == "released")
-    )
+    released_stmt = select(
+        func.count(Escrow.id),
+        func.coalesce(func.sum(Escrow.amount), 0),
+    ).where(Escrow.status == "released")
+    if family_id is not None:
+        released_stmt = released_stmt.where(Escrow.family_id == family_id)
+    if user_id is not None:
+        released_stmt = released_stmt.where(Escrow.user_id == user_id)
+    released = await session.execute(released_stmt)
     released_row = released.one()
 
     summary = {

@@ -5,7 +5,6 @@ B tiered interest: Tier1(0~1000, 2.0%), Tier2(1000~P_active, 1.2%), Tier3(P_acti
 Charter reference: §4.5, §5
 """
 
-import pytest
 
 from app.services.interest import calculate_b_interest, calculate_c_dividend
 

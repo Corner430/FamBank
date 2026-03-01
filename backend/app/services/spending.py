@@ -19,6 +19,9 @@ async def spend_from_a(
     session: AsyncSession,
     amount_cents: int,
     description: str = "",
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
 ) -> dict:
     """Spend from A account (零钱宝).
 
@@ -26,6 +29,8 @@ async def spend_from_a(
         session: Database session.
         amount_cents: Amount to spend in cents (must be > 0).
         description: Spending description.
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: Acting user ID for audit trail.
 
     Returns:
         Dict with balance_before, balance_after, amount.
@@ -37,7 +42,13 @@ async def spend_from_a(
     if amount_cents <= 0:
         raise ValueError("消费金额必须为正数")
 
-    logger.info("spending_started", amount_cents=amount_cents, description=description)
+    logger.info(
+        "spending_started",
+        amount_cents=amount_cents,
+        description=description,
+        family_id=family_id,
+        user_id=user_id,
+    )
 
     # Check that settlement is not in progress
     lock_check = await session.execute(
@@ -48,10 +59,13 @@ async def spend_from_a(
         logger.warning("spending_blocked_by_settlement")
         raise RuntimeError("结算进行中，请稍后再试")
 
-    # Load account A
-    result = await session.execute(
-        select(Account).where(Account.account_type == "A")
-    )
+    # Load account A -- filter by family_id and user_id for tenant isolation
+    stmt = select(Account).where(Account.account_type == "A")
+    if family_id is not None:
+        stmt = stmt.where(Account.family_id == family_id)
+    if user_id is not None:
+        stmt = stmt.where(Account.user_id == user_id)
+    result = await session.execute(stmt)
     account_a = result.scalar_one_or_none()
 
     if account_a is None:
@@ -73,6 +87,13 @@ async def spend_from_a(
     account_a.balance -= amount_cents
     balance_after = account_a.balance
 
+    # Common kwargs for TransactionLog tenant fields
+    tx_tenant = {}
+    if family_id is not None:
+        tx_tenant["family_id"] = family_id
+    if user_id is not None:
+        tx_tenant["user_id"] = user_id
+
     # Create audit trail
     session.add(TransactionLog(
         type="a_spend",
@@ -83,6 +104,7 @@ async def spend_from_a(
         balance_after=balance_after,
         charter_clause="第3条",
         description=description,
+        **tx_tenant,
     ))
 
     await session.flush()

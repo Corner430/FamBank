@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { api, ApiError } from '../services/api'
+import { ref, computed } from 'vue'
+import { api, getStoredUser, ApiError } from '../services/api'
+import ChildSelector from '../components/ChildSelector.vue'
 
 interface SplitResult {
   total: string
@@ -9,22 +10,38 @@ interface SplitResult {
   escrow_note: string | null
 }
 
+const user = getStoredUser()
 const amount = ref('')
 const description = ref('')
+const childId = ref<number | null>(null)
 const loading = ref(false)
 const error = ref('')
 const result = ref<SplitResult | null>(null)
+
+const isValidAmount = computed(() => {
+  const val = parseFloat(amount.value)
+  return !isNaN(val) && val > 0
+})
+
+function onChildSelect(id: number) {
+  childId.value = id
+}
 
 async function submitIncome() {
   error.value = ''
   result.value = null
   loading.value = true
 
+  const body: Record<string, unknown> = {
+    amount: amount.value,
+    description: description.value,
+  }
+  if (user?.role === 'parent' && childId.value) {
+    body.child_id = childId.value
+  }
+
   try {
-    const res = await api.post<SplitResult>('/income', {
-      amount: amount.value,
-      description: description.value,
-    })
+    const res = await api.post<SplitResult>('/income', body)
     result.value = res
     amount.value = ''
     description.value = ''
@@ -44,6 +61,8 @@ async function submitIncome() {
   <div class="income-page">
     <h1>录入收入</h1>
 
+    <ChildSelector @select="onChildSelect" />
+
     <div class="form">
       <div class="form-group">
         <label>金额（元）</label>
@@ -59,7 +78,7 @@ async function submitIncome() {
         <label>备注（可选）</label>
         <input v-model="description" type="text" placeholder="如：压岁钱" />
       </div>
-      <button @click="submitIncome" :disabled="loading || !amount">
+      <button @click="submitIncome" :disabled="loading || !isValidAmount">
         {{ loading ? '处理中...' : '录入' }}
       </button>
     </div>

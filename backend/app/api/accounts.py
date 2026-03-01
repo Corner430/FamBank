@@ -1,17 +1,17 @@
 """Accounts API: GET /accounts, spending, purchase endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AnyUser, ParentUser
+from app.api.deps import ChildId, FamilyContext, ParentContext
 from app.database import get_db
 from app.models.account import Account
 from app.models.debt import Debt
+from app.models.user import User
 from app.schemas.common import cents_to_yuan, yuan_to_cents
 from app.schemas.purchase import (
     DeductionDetail,
-    PurchaseApproveRequest,
     PurchaseRequest,
     PurchaseResponse,
     RefundRequest,
@@ -26,16 +26,42 @@ router = APIRouter(tags=["accounts"])
 
 @router.get("/accounts")
 async def get_accounts(
-    user: AnyUser,
+    ctx: FamilyContext,
     db: AsyncSession = Depends(get_db),
+    child_id: int | None = Query(None, description="目标孩子ID（家长必传）"),
 ):
     """Get all 3 account balances and details."""
-    result = await db.execute(select(Account).order_by(Account.account_type))
+    # Resolve target user
+    if ctx.role == "child":
+        target_user_id = ctx.user_id
+    else:
+        if child_id is None:
+            raise HTTPException(status_code=400, detail="请指定目标孩子 (child_id)")
+        result = await db.execute(
+            select(User).where(
+                User.id == child_id,
+                User.family_id == ctx.family_id,
+                User.role == "child",
+            )
+        )
+        if result.scalars().first() is None:
+            raise HTTPException(status_code=404, detail="指定的孩子不存在或不属于您的家庭")
+        target_user_id = child_id
+
+    result = await db.execute(
+        select(Account)
+        .where(Account.family_id == ctx.family_id, Account.user_id == target_user_id)
+        .order_by(Account.account_type)
+    )
     accounts = result.scalars().all()
 
-    # Calculate total debt
+    # Calculate total debt for this child
     debt_result = await db.execute(
-        select(Debt).where(Debt.remaining_amount > 0)
+        select(Debt).where(
+            Debt.remaining_amount > 0,
+            Debt.family_id == ctx.family_id,
+            Debt.user_id == target_user_id,
+        )
     )
     debts = debt_result.scalars().all()
     total_debt = sum(d.remaining_amount for d in debts)
@@ -65,7 +91,8 @@ async def get_accounts(
 @router.post("/accounts/a/spend", response_model=SpendResponse)
 async def spend_a(
     req: SpendRequest,
-    user: AnyUser,
+    child_id_resolved: ChildId,
+    ctx: FamilyContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Spend from A account (零钱宝). §3"""
@@ -78,7 +105,11 @@ async def spend_a(
         raise HTTPException(status_code=400, detail="消费金额必须为正数")
 
     try:
-        result = await spend_from_a(db, amount_cents, req.description)
+        result = await spend_from_a(
+            db, amount_cents, req.description,
+            family_id=ctx.family_id,
+            user_id=child_id_resolved,
+        )
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -95,7 +126,8 @@ async def spend_a(
 @router.post("/accounts/b/purchase", response_model=PurchaseResponse)
 async def purchase_from_b(
     req: PurchaseRequest,
-    user: AnyUser,
+    child_id_resolved: ChildId,
+    ctx: FamilyContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Execute a purchase from B account (梦想金). §4.6"""
@@ -114,6 +146,8 @@ async def purchase_from_b(
             actual_cost=actual_cost_cents,
             is_substitute=req.is_substitute,
             description=req.description,
+            family_id=ctx.family_id,
+            user_id=child_id_resolved,
         )
         await db.commit()
     except ValueError as e:
@@ -135,8 +169,9 @@ async def purchase_from_b(
 
 @router.post("/accounts/b/purchase/approve", response_model=PurchaseResponse)
 async def approve_substitute_purchase(
-    req: PurchaseApproveRequest,
-    user: ParentUser,
+    req: PurchaseRequest,
+    child_id_resolved: ChildId,
+    ctx: ParentContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Approve a substitute purchase (parent only). §4.6"""
@@ -155,6 +190,8 @@ async def approve_substitute_purchase(
             actual_cost=actual_cost_cents,
             is_substitute=True,
             description=req.description,
+            family_id=ctx.family_id,
+            user_id=child_id_resolved,
         )
         await db.commit()
     except ValueError as e:
@@ -177,7 +214,8 @@ async def approve_substitute_purchase(
 @router.post("/accounts/b/refund", response_model=RefundResponse)
 async def refund_to_b(
     req: RefundRequest,
-    user: ParentUser,
+    child_id_resolved: ChildId,
+    ctx: ParentContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Process a refund back to B account. §6.2"""
@@ -194,6 +232,8 @@ async def refund_to_b(
             db,
             purchase_transaction_id=req.purchase_transaction_id,
             refund_amount=refund_cents,
+            family_id=ctx.family_id,
+            user_id=child_id_resolved,
         )
         await db.commit()
     except ValueError as e:

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { api, ApiError } from '../services/api'
+import { api, getStoredUser, ApiError } from '../services/api'
+import ChildSelector from '../components/ChildSelector.vue'
 
 interface WishItem {
   id: number
@@ -34,6 +35,10 @@ interface PurchaseResult {
   is_substitute: boolean
 }
 
+const user = computed(() => getStoredUser())
+const isParent = computed(() => user.value?.role === 'parent')
+
+const childId = ref<number | null>(null)
 const wishList = ref<WishListData | null>(null)
 const loading = ref(true)
 const error = ref('')
@@ -48,6 +53,7 @@ const newItems = ref<{ name: string; price: string; verification_url: string }[]
 // Price update
 const editingPriceItemId = ref<number | null>(null)
 const newPrice = ref('')
+const creating = ref(false)
 
 // Purchase
 const purchasingItemId = ref<number | null>(null)
@@ -66,18 +72,23 @@ const lockDaysRemaining = computed(() => {
 
 const isLocked = computed(() => lockDaysRemaining.value > 0)
 
+function childParam(): string {
+  return isParent.value && childId.value ? `?child_id=${childId.value}` : ''
+}
+
+function onChildSelect(id: number) {
+  childId.value = id
+  loadWishList()
+}
+
 async function loadWishList() {
   loading.value = true
   error.value = ''
   try {
-    const res = await api.get<WishListData | null>('/wishlist')
+    const res = await api.get<WishListData | null>(`/wishlist${childParam()}`)
     wishList.value = res
   } catch (e: unknown) {
-    if (e instanceof ApiError) {
-      error.value = e.message
-    } else {
-      error.value = '加载失败'
-    }
+    error.value = e instanceof ApiError ? e.message : '加载失败'
   } finally {
     loading.value = false
   }
@@ -102,18 +113,21 @@ async function createWishList() {
     return
   }
 
+  creating.value = true
   try {
-    const res = await api.post<WishListData>('/wishlist', { items })
+    const body: Record<string, unknown> = { items }
+    if (isParent.value && childId.value) {
+      body.child_id = childId.value
+    }
+    const res = await api.post<WishListData>('/wishlist', body)
     wishList.value = res
     showAddForm.value = false
     newItems.value = [{ name: '', price: '', verification_url: '' }]
     successMsg.value = '愿望清单创建成功'
   } catch (e: unknown) {
-    if (e instanceof ApiError) {
-      error.value = e.message
-    } else {
-      error.value = '创建失败'
-    }
+    error.value = e instanceof ApiError ? e.message : '创建失败'
+  } finally {
+    creating.value = false
   }
 }
 
@@ -123,17 +137,13 @@ async function updatePrice(itemId: number) {
   if (!newPrice.value) return
 
   try {
-    await api.patch(`/wishlist/items/${itemId}/price`, { price: newPrice.value })
+    await api.patch(`/wishlist/items/${itemId}/price${childParam()}`, { price: newPrice.value })
     editingPriceItemId.value = null
     newPrice.value = ''
     successMsg.value = '价格更新成功'
     await loadWishList()
   } catch (e: unknown) {
-    if (e instanceof ApiError) {
-      error.value = e.message
-    } else {
-      error.value = '更新失败'
-    }
+    error.value = e instanceof ApiError ? e.message : '更新失败'
   }
 }
 
@@ -141,15 +151,15 @@ async function declareTarget(itemId: number) {
   error.value = ''
   successMsg.value = ''
   try {
-    await api.post('/wishlist/declare-target', { wish_item_id: itemId })
+    const body: Record<string, unknown> = { wish_item_id: itemId }
+    if (isParent.value && childId.value) {
+      body.child_id = childId.value
+    }
+    await api.post('/wishlist/declare-target', body)
     successMsg.value = '目标已设定'
     await loadWishList()
   } catch (e: unknown) {
-    if (e instanceof ApiError) {
-      error.value = e.message
-    } else {
-      error.value = '设定失败'
-    }
+    error.value = e instanceof ApiError ? e.message : '设定失败'
   }
 }
 
@@ -157,15 +167,11 @@ async function clearTarget() {
   error.value = ''
   successMsg.value = ''
   try {
-    await api.delete('/wishlist/declare-target')
+    await api.delete(`/wishlist/declare-target${childParam()}`)
     successMsg.value = '目标已清除，P_active恢复为最高价'
     await loadWishList()
   } catch (e: unknown) {
-    if (e instanceof ApiError) {
-      error.value = e.message
-    } else {
-      error.value = '清除失败'
-    }
+    error.value = e instanceof ApiError ? e.message : '清除失败'
   }
 }
 
@@ -179,12 +185,16 @@ async function executePurchase(itemId: number) {
   }
 
   try {
-    const res = await api.post<PurchaseResult>('/accounts/b/purchase', {
+    const body: Record<string, unknown> = {
       wish_item_id: itemId,
       actual_cost: purchaseCost.value,
       is_substitute: purchaseIsSubstitute.value,
       description: purchaseDescription.value,
-    })
+    }
+    if (isParent.value && childId.value) {
+      body.child_id = childId.value
+    }
+    const res = await api.post<PurchaseResult>('/accounts/b/purchase', body)
     purchaseResult.value = res
     purchasingItemId.value = null
     purchaseCost.value = ''
@@ -193,11 +203,7 @@ async function executePurchase(itemId: number) {
     successMsg.value = `购买成功: ${res.item_name}`
     await loadWishList()
   } catch (e: unknown) {
-    if (e instanceof ApiError) {
-      error.value = e.message
-    } else {
-      error.value = '购买失败'
-    }
+    error.value = e instanceof ApiError ? e.message : '购买失败'
   }
 }
 
@@ -207,6 +213,8 @@ onMounted(loadWishList)
 <template>
   <div class="wishlist-page">
     <h1>愿望清单</h1>
+
+    <ChildSelector v-if="isParent" @select="onChildSelect" />
 
     <p v-if="loading">加载中...</p>
     <p v-if="error" class="error">{{ error }}</p>
@@ -336,8 +344,8 @@ onMounted(loadWishList)
       </div>
       <div class="form-actions">
         <button class="btn-small" @click="addItemRow">添加物品</button>
-        <button @click="createWishList">提交</button>
-        <button class="btn-secondary" @click="showAddForm = false">取消</button>
+        <button @click="createWishList" :disabled="creating">{{ creating ? '提交中...' : '提交' }}</button>
+        <button class="btn-secondary" @click="showAddForm = false" :disabled="creating">取消</button>
       </div>
     </div>
   </div>

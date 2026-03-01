@@ -6,14 +6,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import ParentUser
+from app.api.deps import ParentContext
 from app.database import get_db
 from app.models.settlement import Settlement
 from app.schemas.common import cents_to_yuan
 from app.schemas.settlement import (
-    SettlementBalances,
+    ChildSettlementResult,
+    FamilySettlementResponse,
     SettlementInterestDetail,
-    SettlementResponse,
     SettlementStepDetail,
     SettlementSteps,
 )
@@ -22,65 +22,74 @@ from app.services.settlement import execute_settlement
 router = APIRouter(tags=["settlement"])
 
 
-@router.post("/settlement", response_model=SettlementResponse)
+@router.post("/settlement", response_model=FamilySettlementResponse)
 async def create_settlement(
-    user: ParentUser,
+    ctx: ParentContext,
     db: AsyncSession = Depends(get_db),
 ):
-    """Trigger monthly settlement. Parent-only. §SOP"""
+    """Trigger monthly settlement for all children in the family. Parent-only. §SOP"""
     today = date.today()
 
     try:
-        result = await execute_settlement(db, today)
+        result = await execute_settlement(db, today, family_id=ctx.family_id)
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
-    steps = result["steps"]
-    balances = result["balances_after"]
+    child_results = []
+    for r in result["results"]:
+        steps = None
+        if r["steps"] is not None:
+            s = r["steps"]
+            steps = SettlementSteps(
+                c_dividend=SettlementStepDetail(
+                    amount=cents_to_yuan(s["c_dividend"]["amount"]),
+                ),
+                b_overflow=SettlementStepDetail(
+                    amount=cents_to_yuan(s["b_overflow"]["amount"]),
+                ),
+                b_interest=SettlementInterestDetail(
+                    amount=cents_to_yuan(s["b_interest"]["amount"]),
+                    tier1=cents_to_yuan(s["b_interest"]["tier1"]),
+                    tier2=cents_to_yuan(s["b_interest"]["tier2"]),
+                    tier3=cents_to_yuan(s["b_interest"]["tier3"]),
+                ),
+                violation_transfer=SettlementStepDetail(
+                    amount=cents_to_yuan(s["violation_transfer"]["amount"]),
+                ),
+            )
 
-    return SettlementResponse(
-        settlement_id=result["settlement_id"],
-        date=result["date"],
-        steps=SettlementSteps(
-            c_dividend=SettlementStepDetail(
-                amount=cents_to_yuan(steps["c_dividend"]["amount"]),
-            ),
-            b_overflow=SettlementStepDetail(
-                amount=cents_to_yuan(steps["b_overflow"]["amount"]),
-            ),
-            b_interest=SettlementInterestDetail(
-                amount=cents_to_yuan(steps["b_interest"]["amount"]),
-                tier1=cents_to_yuan(steps["b_interest"]["tier1"]),
-                tier2=cents_to_yuan(steps["b_interest"]["tier2"]),
-                tier3=cents_to_yuan(steps["b_interest"]["tier3"]),
-            ),
-            violation_transfer=SettlementStepDetail(
-                amount=cents_to_yuan(steps["violation_transfer"]["amount"]),
-            ),
-        ),
-        balances_after=SettlementBalances(
-            A=cents_to_yuan(balances["A"]),
-            B_principal=cents_to_yuan(balances["B_principal"]),
-            B_interest_pool=cents_to_yuan(balances["B_interest_pool"]),
-            C=cents_to_yuan(balances["C"]),
-        ),
+        child_results.append(
+            ChildSettlementResult(
+                child_id=r["child_id"],
+                child_name=r["child_name"],
+                settlement_id=r["settlement_id"],
+                status=r["status"],
+                steps=steps,
+                error=r.get("error"),
+            )
+        )
+
+    return FamilySettlementResponse(
+        settlement_date=result["settlement_date"],
+        results=child_results,
     )
 
 
 @router.get("/settlements")
 async def list_settlements(
-    user: ParentUser,
+    ctx: ParentContext,
     page: int = 1,
     per_page: int = 12,
     db: AsyncSession = Depends(get_db),
 ):
-    """List settlement history. Parent-only."""
+    """List settlement history for the family. Parent-only."""
     offset = (page - 1) * per_page
     result = await db.execute(
         select(Settlement)
+        .where(Settlement.family_id == ctx.family_id)
         .order_by(Settlement.settlement_date.desc())
         .limit(per_page)
         .offset(offset)
@@ -92,6 +101,7 @@ async def list_settlements(
             {
                 "id": s.id,
                 "date": str(s.settlement_date),
+                "user_id": s.user_id,
                 "status": s.status,
                 "c_dividend": cents_to_yuan(s.c_dividend_amount),
                 "b_overflow": cents_to_yuan(s.b_overflow_amount),

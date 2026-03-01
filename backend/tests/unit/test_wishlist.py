@@ -4,7 +4,6 @@ Tests: avg_price, max_price calculation, P_active switching.
 Charter reference: §4.2 (wish list), §4.3 (target)
 """
 
-from datetime import date
 
 import pytest
 

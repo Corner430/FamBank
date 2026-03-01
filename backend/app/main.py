@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api import accounts as accounts_api
 from app.api import auth as auth_api
 from app.api import config as config_api
+from app.api import family as family_api
 from app.api import income as income_api
 from app.api import redemption as redemption_api
 from app.api import settlement as settlement_api
@@ -29,21 +30,29 @@ logger = structlog.get_logger("fambank")
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown."""
     setup_logging()
-    logger.info("app_started", version="0.1.0")
+    logger.info("app_started", version="0.2.0")
     yield
     logger.info("app_stopped")
 
 
 app = FastAPI(
     title="FamBank 家庭内部银行",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
 # CORS for frontend dev server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:8000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+        "http://localhost:8000",
+        "http://21.214.116.91:5175",
+        "http://21.214.116.91:5174",
+        "http://21.214.116.91:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,6 +63,7 @@ app.add_middleware(RequestLoggingMiddleware)
 
 # API routes
 app.include_router(auth_api.router, prefix="/api/v1")
+app.include_router(family_api.router, prefix="/api/v1")
 app.include_router(income_api.router, prefix="/api/v1")
 app.include_router(accounts_api.router, prefix="/api/v1")
 app.include_router(settlement_api.router, prefix="/api/v1")
@@ -66,7 +76,7 @@ app.include_router(violations_api.router, prefix="/api/v1")
 
 @app.get("/api/v1/health", response_model=HealthResponse)
 async def health_check():
-    return HealthResponse(status="ok", version="0.1.0")
+    return HealthResponse(status="ok", version="0.2.0")
 
 
 # Mount static files for production (frontend build output) with SPA fallback

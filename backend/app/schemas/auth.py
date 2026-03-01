@@ -1,35 +1,66 @@
-"""Auth schemas: PIN change/reset request and response models."""
+"""Auth schemas: phone+SMS code request/response models."""
 
 from pydantic import BaseModel, field_validator
 
 
-class ChangePinRequest(BaseModel):
-    old_pin: str
-    new_pin: str
+class SendCodeRequest(BaseModel):
+    phone: str
 
-    @field_validator("new_pin")
+    @field_validator("phone")
     @classmethod
-    def validate_new_pin(cls, v: str) -> str:
-        if len(v) < 4:
-            raise ValueError("新密码至少4位")
-        if len(v) > 64:
-            raise ValueError("新密码不能超过64位")
+    def validate_phone(cls, v: str) -> str:
+        import re
+
+        if not re.match(r"^1\d{10}$", v):
+            raise ValueError("手机号格式不正确")
         return v
 
 
-class ResetChildPinRequest(BaseModel):
-    parent_pin: str
-    new_child_pin: str
-
-    @field_validator("new_child_pin")
-    @classmethod
-    def validate_new_child_pin(cls, v: str) -> str:
-        if len(v) < 4:
-            raise ValueError("新PIN码至少4位")
-        if len(v) > 64:
-            raise ValueError("新PIN码不能超过64位")
-        return v
-
-
-class PinChangeResponse(BaseModel):
+class SendCodeResponse(BaseModel):
     message: str
+    expires_in: int
+
+
+class VerifyCodeRequest(BaseModel):
+    phone: str
+    code: str
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        import re
+
+        if not re.match(r"^1\d{10}$", v):
+            raise ValueError("手机号格式不正确")
+        return v
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, v: str) -> str:
+        if not v or len(v) != 6 or not v.isdigit():
+            raise ValueError("验证码必须为6位数字")
+        return v
+
+
+class UserInfo(BaseModel):
+    id: int
+    phone: str
+    family_id: int | None = None
+    role: str | None = None
+    name: str | None = None
+
+
+class VerifyCodeResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    user: UserInfo
+    is_new_user: bool
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class RefreshResponse(BaseModel):
+    access_token: str
+    refresh_token: str

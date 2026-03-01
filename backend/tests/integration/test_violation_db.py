@@ -41,7 +41,7 @@ class TestProcessViolation:
     async def test_penalty_transfer(self, accounts_with_pool: AsyncSession):
         """Penalty transferred from B pool to C."""
         session = accounts_with_pool
-        result = await process_violation(session, 20000, 0, "违规消费")
+        result = await process_violation(session, 20000, 0, "违规消费", family_id=1, user_id=2)
 
         # penalty = min(100000, 40000) = 40000
         assert result["penalty"] == 40000
@@ -63,7 +63,7 @@ class TestProcessViolation:
         )
         await session.commit()
 
-        result = await process_violation(session, 20000, 0, "违规")
+        result = await process_violation(session, 20000, 0, "违规", family_id=1, user_id=2)
 
         # penalty = min(30000, 40000) = 30000
         assert result["penalty"] == 30000
@@ -74,7 +74,7 @@ class TestProcessViolation:
     async def test_pool_zero(self, seeded_accounts: AsyncSession):
         """When pool = 0, no penalty transferred."""
         session = seeded_accounts
-        result = await process_violation(session, 20000, 0, "违规")
+        result = await process_violation(session, 20000, 0, "违规", family_id=1, user_id=2)
 
         assert result["penalty"] == 0
         assert result["b_interest_pool_after"] == 0
@@ -84,7 +84,7 @@ class TestProcessViolation:
     async def test_violation_record_created(self, accounts_with_pool: AsyncSession):
         """A Violation record is created in the database."""
         session = accounts_with_pool
-        result = await process_violation(session, 20000, 5000, "测试违规")
+        result = await process_violation(session, 20000, 5000, "测试违规", family_id=1, user_id=2)
         await session.flush()
 
         v_result = await session.execute(
@@ -101,7 +101,7 @@ class TestProcessViolation:
     async def test_no_escalation_first_violation(self, accounts_with_pool: AsyncSession):
         """First violation in 12 months should NOT be escalated."""
         session = accounts_with_pool
-        result = await process_violation(session, 10000, 0, "第一次违规")
+        result = await process_violation(session, 10000, 0, "第一次违规", family_id=1, user_id=2)
 
         assert result["is_escalated"] is False
 
@@ -111,11 +111,11 @@ class TestProcessViolation:
         session = accounts_with_pool
 
         # First violation
-        await process_violation(session, 10000, 0, "第一次违规")
+        await process_violation(session, 10000, 0, "第一次违规", family_id=1, user_id=2)
         await session.flush()
 
         # Second violation — should escalate
-        result = await process_violation(session, 10000, 0, "第二次违规")
+        result = await process_violation(session, 10000, 0, "第二次违规", family_id=1, user_id=2)
 
         assert result["is_escalated"] is True
         assert result["deposit_suspend_until"] is not None
@@ -132,16 +132,16 @@ class TestProcessViolation:
     async def test_negative_violation_rejected(self, seeded_accounts: AsyncSession):
         """Negative violation amount is rejected."""
         with pytest.raises(ValueError, match="正数"):
-            await process_violation(seeded_accounts, -100, 0, "负数")
+            await process_violation(seeded_accounts, -100, 0, "负数", family_id=1, user_id=2)
 
     @pytest.mark.asyncio
     async def test_zero_violation_rejected(self, seeded_accounts: AsyncSession):
         """Zero violation amount is rejected."""
         with pytest.raises(ValueError, match="正数"):
-            await process_violation(seeded_accounts, 0, 0, "零")
+            await process_violation(seeded_accounts, 0, 0, "零", family_id=1, user_id=2)
 
     @pytest.mark.asyncio
     async def test_negative_entered_a_rejected(self, seeded_accounts: AsyncSession):
         """Negative amount_entered_a is rejected."""
         with pytest.raises(ValueError, match="不能为负"):
-            await process_violation(seeded_accounts, 100, -1, "负数")
+            await process_violation(seeded_accounts, 100, -1, "负数", family_id=1, user_id=2)

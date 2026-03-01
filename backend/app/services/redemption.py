@@ -49,10 +49,19 @@ async def request_redemption(
     amount_cents: int,
     user_id: int,
     reason: str = "",
+    *,
+    family_id: int | None = None,
 ) -> dict:
     """Validate and persist a C redemption request.
 
     Creates a RedemptionRequest record in the database with status='pending'.
+
+    Args:
+        session: Database session.
+        amount_cents: Amount to redeem in cents.
+        user_id: Requesting user ID.
+        reason: Reason for redemption.
+        family_id: Tenant family ID for multi-tenant isolation.
 
     Returns:
         Dict with id, amount, fee, net, c_balance, reason, status, created_at.
@@ -63,12 +72,20 @@ async def request_redemption(
     if amount_cents <= 0:
         raise ValueError("赎回金额必须为正数")
 
-    logger.info("redemption_requested", amount_cents=amount_cents, reason=reason, user_id=user_id)
-
-    # Load C account
-    result = await session.execute(
-        select(Account).where(Account.account_type == "C")
+    logger.info(
+        "redemption_requested",
+        amount_cents=amount_cents,
+        reason=reason,
+        user_id=user_id,
+        family_id=family_id,
     )
+
+    # Load C account -- filter by family_id and user_id for tenant isolation
+    stmt = select(Account).where(Account.account_type == "C")
+    if family_id is not None:
+        stmt = stmt.where(Account.family_id == family_id)
+    stmt = stmt.where(Account.user_id == user_id)
+    result = await session.execute(stmt)
     account_c = result.scalars().first()
     if not account_c:
         raise RuntimeError("系统未初始化：缺少C账户")
@@ -78,14 +95,17 @@ async def request_redemption(
 
     fee, net = calculate_redemption_fee(amount_cents)
 
-    record = RedemptionRequest(
-        amount=amount_cents,
-        fee=fee,
-        net=net,
-        reason=reason,
-        status="pending",
-        requested_by=user_id,
-    )
+    record_kwargs: dict = {
+        "amount": amount_cents,
+        "fee": fee,
+        "net": net,
+        "reason": reason,
+        "status": "pending",
+        "requested_by": user_id,
+    }
+    if family_id is not None:
+        record_kwargs["family_id"] = family_id
+    record = RedemptionRequest(**record_kwargs)
     session.add(record)
     await session.flush()
     await session.refresh(record)
@@ -107,6 +127,8 @@ async def approve_redemption(
     request_id: int,
     approved: bool,
     reviewer_id: int,
+    *,
+    family_id: int | None = None,
 ) -> dict:
     """Approve or reject a pending C redemption by record id.
 
@@ -116,13 +138,21 @@ async def approve_redemption(
       - Add net to A as c_redemption transaction
       - Create TransactionLog entries with charter_clause="第5条"
 
+    Args:
+        session: Database session.
+        request_id: ID of the RedemptionRequest.
+        approved: Whether to approve or reject.
+        reviewer_id: Reviewing user ID.
+        family_id: Tenant family ID for multi-tenant isolation.
+
     Returns:
         Dict with result details.
     """
-    # Load the redemption request
-    result = await session.execute(
-        select(RedemptionRequest).where(RedemptionRequest.id == request_id)
-    )
+    # Load the redemption request -- filter by family_id for tenant isolation
+    rr_stmt = select(RedemptionRequest).where(RedemptionRequest.id == request_id)
+    if family_id is not None:
+        rr_stmt = rr_stmt.where(RedemptionRequest.family_id == family_id)
+    result = await session.execute(rr_stmt)
     record = result.scalars().first()
     if not record:
         raise ValueError("赎回请求不存在")
@@ -146,10 +176,13 @@ async def approve_redemption(
             "reason": record.reason,
         }
 
-    # Load accounts
-    result = await session.execute(
-        select(Account).where(Account.account_type.in_(["A", "C"]))
-    )
+    # Load accounts -- filter by family_id for tenant isolation
+    acc_stmt = select(Account).where(Account.account_type.in_(["A", "C"]))
+    if family_id is not None:
+        acc_stmt = acc_stmt.where(Account.family_id == family_id)
+    # Use the requesting user's accounts
+    acc_stmt = acc_stmt.where(Account.user_id == record.requested_by)
+    result = await session.execute(acc_stmt)
     accounts = {a.account_type: a for a in result.scalars().all()}
     account_a = accounts.get("A")
     account_c = accounts.get("C")
@@ -159,6 +192,13 @@ async def approve_redemption(
 
     if account_c.balance < record.amount:
         raise ValueError("C账户余额不足")
+
+    # Common kwargs for TransactionLog tenant fields
+    tx_tenant = {}
+    if family_id is not None:
+        tx_tenant["family_id"] = family_id
+    # Use the requesting user's ID for the transaction log
+    tx_tenant["user_id"] = record.requested_by
 
     # Deduct full amount from C
     c_before = account_c.balance
@@ -174,6 +214,7 @@ async def approve_redemption(
         balance_after=account_c.balance,
         charter_clause="第5条",
         description=f"C赎回手续费：{record.reason}" if record.reason else "C赎回手续费",
+        **tx_tenant,
     ))
 
     # Add net to A
@@ -189,6 +230,7 @@ async def approve_redemption(
         balance_after=account_a.balance,
         charter_clause="第5条",
         description=f"C赎回到A：{record.reason}" if record.reason else "C赎回到A",
+        **tx_tenant,
     ))
 
     # Update record status
@@ -220,19 +262,32 @@ async def approve_redemption(
     }
 
 
-async def get_pending_redemptions(session: AsyncSession) -> list[dict]:
-    """Query all pending redemption requests."""
-    result = await session.execute(
+async def get_pending_redemptions(
+    session: AsyncSession,
+    *,
+    family_id: int | None = None,
+) -> list[dict]:
+    """Query all pending redemption requests.
+
+    Args:
+        session: Database session.
+        family_id: Tenant family ID for multi-tenant isolation.
+    """
+    rr_stmt = (
         select(RedemptionRequest)
         .where(RedemptionRequest.status == "pending")
         .order_by(RedemptionRequest.created_at.asc())
     )
+    if family_id is not None:
+        rr_stmt = rr_stmt.where(RedemptionRequest.family_id == family_id)
+    result = await session.execute(rr_stmt)
     records = result.scalars().all()
 
-    # Also load current C balance for display
-    c_result = await session.execute(
-        select(Account).where(Account.account_type == "C")
-    )
+    # Also load current C balance for display -- filter by family
+    c_stmt = select(Account).where(Account.account_type == "C")
+    if family_id is not None:
+        c_stmt = c_stmt.where(Account.family_id == family_id)
+    c_result = await session.execute(c_stmt)
     account_c = c_result.scalars().first()
     c_balance = account_c.balance if account_c else 0
 

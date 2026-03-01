@@ -95,23 +95,18 @@ async def get_transaction_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """Run init.sql and triggers.sql to create tables and triggers."""
+    """Run init.sql to create tables, triggers, and seed data."""
     import pathlib
 
     migrations_dir = pathlib.Path(__file__).parent / "migrations"
 
     async with engine.begin() as conn:
-        # Create tables
+        # Create tables and triggers (init.sql contains DELIMITER blocks)
         init_sql = (migrations_dir / "init.sql").read_text(encoding="utf-8")
-        for statement in _split_sql(init_sql):
+        for statement in _split_sql_triggers(init_sql):
             await conn.execute(sqlalchemy_text(statement))
 
-        # Create triggers
-        triggers_sql = (migrations_dir / "triggers.sql").read_text(encoding="utf-8")
-        for statement in _split_sql_triggers(triggers_sql):
-            await conn.execute(sqlalchemy_text(statement))
-
-        # Seed default data
+        # Seed default data (no-op in V2; config is created per-family)
         seed_sql = (migrations_dir / "seed.sql").read_text(encoding="utf-8")
         for statement in _split_sql(seed_sql):
             await conn.execute(sqlalchemy_text(statement))

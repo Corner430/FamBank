@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AnyUser, ParentUser
+from app.api.deps import ChildId, FamilyContext, ParentContext
 from app.database import get_db
 from app.schemas.common import cents_to_yuan, yuan_to_cents
 from app.schemas.redemption import (
@@ -25,10 +25,11 @@ router = APIRouter(tags=["redemption"])
 @router.post("/accounts/c/redemption/request", response_model=RedemptionPending)
 async def create_redemption_request(
     req: RedemptionRequest,
-    user: AnyUser,
+    child_id_resolved: ChildId,
+    ctx: FamilyContext,
     db: AsyncSession = Depends(get_db),
 ):
-    """Request C redemption (any auth). S5"""
+    """Request C redemption. S5"""
     try:
         amount_cents = yuan_to_cents(req.amount)
     except (ValueError, ArithmeticError) as e:
@@ -38,7 +39,10 @@ async def create_redemption_request(
         raise HTTPException(status_code=400, detail="赎回金额必须为正数")
 
     try:
-        result = await request_redemption(db, amount_cents, user["user_id"], req.reason)
+        result = await request_redemption(
+            db, amount_cents, child_id_resolved, req.reason,
+            family_id=ctx.family_id,
+        )
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -58,12 +62,15 @@ async def create_redemption_request(
 @router.post("/accounts/c/redemption/approve", response_model=RedemptionResult)
 async def approve_redemption_request(
     req: RedemptionApproveRequest,
-    user: ParentUser,
+    ctx: ParentContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Approve or reject C redemption (parent auth). S5"""
     try:
-        result = await approve_redemption(db, req.id, req.approved, user["user_id"])
+        result = await approve_redemption(
+            db, req.id, req.approved, ctx.user_id,
+            family_id=ctx.family_id,
+        )
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -90,11 +97,14 @@ async def approve_redemption_request(
 
 @router.get("/accounts/c/redemption/pending", response_model=RedemptionPendingList)
 async def list_pending_redemptions(
-    user: AnyUser,
+    ctx: FamilyContext,
     db: AsyncSession = Depends(get_db),
 ):
-    """List all pending C redemption requests (any auth). S5"""
-    rows = await get_pending_redemptions(db)
+    """List all pending C redemption requests for the family. S5"""
+    rows = await get_pending_redemptions(
+        db,
+        family_id=ctx.family_id,
+    )
     return RedemptionPendingList(
         requests=[
             RedemptionPending(
