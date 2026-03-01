@@ -37,7 +37,7 @@ jobs:
 
       - name: Install backend dependencies
         working-directory: backend
-        run: uv sync
+        run: uv sync --extra dev
 
       - name: Lint (ruff)
         working-directory: backend
