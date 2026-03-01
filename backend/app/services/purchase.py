@@ -93,12 +93,23 @@ async def validate_purchase(
     wish_item_id: int,
     actual_cost: int,
     is_substitute: bool,
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
 ) -> dict:
     """Full purchase validation with DB lookups. S4.6
 
     Checks:
     - Item exists and belongs to active wish list
+    - Wish list belongs to the correct family (tenant isolation)
     - Compliance (substitute limit, balance sufficiency)
+
+    Args:
+        wish_item_id: ID of the wish item to purchase.
+        actual_cost: Actual cost in cents.
+        is_substitute: Whether this is a substitute purchase.
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: Acting user ID for per-child validation.
 
     Returns:
         Dict with 'ok', 'error', 'item', 'wish_list', 'account_b', 'deduction'.
@@ -111,21 +122,27 @@ async def validate_purchase(
     if item is None:
         return {"ok": False, "error": "愿望物品不存在"}
 
-    # Check wish list is active
-    wl_result = await session.execute(
-        select(WishList).where(
-            WishList.id == item.wish_list_id,
-            WishList.status == "active",
-        )
+    # Check wish list is active and belongs to the family
+    wl_stmt = select(WishList).where(
+        WishList.id == item.wish_list_id,
+        WishList.status == "active",
     )
+    if family_id is not None:
+        wl_stmt = wl_stmt.where(WishList.family_id == family_id)
+    if user_id is not None:
+        wl_stmt = wl_stmt.where(WishList.user_id == user_id)
+    wl_result = await session.execute(wl_stmt)
     wish_list = wl_result.scalars().first()
     if wish_list is None:
         return {"ok": False, "error": "该物品的愿望清单不是活跃状态"}
 
-    # Load B account
-    acc_result = await session.execute(
-        select(Account).where(Account.account_type == "B")
-    )
+    # Load B account -- filter by family
+    acc_stmt = select(Account).where(Account.account_type == "B")
+    if family_id is not None:
+        acc_stmt = acc_stmt.where(Account.family_id == family_id)
+    if user_id is not None:
+        acc_stmt = acc_stmt.where(Account.user_id == user_id)
+    acc_result = await session.execute(acc_stmt)
     account_b = acc_result.scalars().first()
     if account_b is None:
         return {"ok": False, "error": "B账户不存在"}
@@ -162,12 +179,24 @@ async def execute_purchase(
     actual_cost: int,
     is_substitute: bool,
     description: str = "",
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
 ) -> dict:
     """Execute a purchase from B account. S4.6
 
     Deduction order: principal first, then interest pool.
     Creates transaction records, updates last_compliant_purchase_date,
     resumes B interest if it was suspended.
+
+    Args:
+        session: Database session.
+        wish_item_id: ID of the wish item to purchase.
+        actual_cost: Actual cost in cents.
+        is_substitute: Whether this is a substitute purchase.
+        description: Purchase description.
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: Acting user ID for audit trail.
 
     Returns:
         Dict with deduction details, balances, and transaction IDs.
@@ -180,9 +209,14 @@ async def execute_purchase(
         wish_item_id=wish_item_id,
         actual_cost=actual_cost,
         is_substitute=is_substitute,
+        family_id=family_id,
+        user_id=user_id,
     )
 
-    validation = await validate_purchase(session, wish_item_id, actual_cost, is_substitute)
+    validation = await validate_purchase(
+        session, wish_item_id, actual_cost, is_substitute,
+        family_id=family_id, user_id=user_id,
+    )
     if not validation["ok"]:
         logger.warning("purchase_validation_failed", error=validation["error"])
         raise ValueError(validation["error"])
@@ -193,6 +227,13 @@ async def execute_purchase(
 
     from_principal = deduction["from_principal"]
     from_interest = deduction["from_interest"]
+
+    # Common kwargs for TransactionLog tenant fields
+    tx_tenant = {}
+    if family_id is not None:
+        tx_tenant["family_id"] = family_id
+    if user_id is not None:
+        tx_tenant["user_id"] = user_id
 
     tx_ids = []
 
@@ -209,9 +250,11 @@ async def execute_purchase(
             balance_after=account_b.balance,
             charter_clause="§4.6",
             description=f"购买 {item.name}: {description}" if description else f"购买 {item.name}",
+            **tx_tenant,
         )
         session.add(tx_principal)
         await session.flush()
+        await session.refresh(tx_principal)
         tx_ids.append(tx_principal.id)
 
     # Deduct from interest pool
@@ -229,9 +272,11 @@ async def execute_purchase(
             description=f"购买 {item.name} (利息池扣除): {description}"
             if description
             else f"购买 {item.name} (利息池扣除)",
+            **tx_tenant,
         )
         session.add(tx_interest)
         await session.flush()
+        await session.refresh(tx_interest)
         tx_ids.append(tx_interest.id)
 
     # Update last compliant purchase date
@@ -271,6 +316,9 @@ async def process_refund(
     session: AsyncSession,
     purchase_transaction_id: int,
     refund_amount: int,
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
 ) -> dict:
     """Process a refund back to B account. S6.2
 
@@ -279,6 +327,8 @@ async def process_refund(
     Args:
         purchase_transaction_id: ID of the original purchase transaction
         refund_amount: Refund amount in cents
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: Acting user ID for audit trail.
 
     Returns:
         Dict with refund details and updated balances.
@@ -293,12 +343,15 @@ async def process_refund(
         "refund_started",
         purchase_transaction_id=purchase_transaction_id,
         refund_amount=refund_amount,
+        family_id=family_id,
+        user_id=user_id,
     )
 
-    # Find the original transaction
-    tx_result = await session.execute(
-        select(TransactionLog).where(TransactionLog.id == purchase_transaction_id)
-    )
+    # Find the original transaction -- filter by family_id for tenant isolation
+    tx_stmt = select(TransactionLog).where(TransactionLog.id == purchase_transaction_id)
+    if family_id is not None:
+        tx_stmt = tx_stmt.where(TransactionLog.family_id == family_id)
+    tx_result = await session.execute(tx_stmt)
     original_tx = tx_result.scalars().first()
     if original_tx is None:
         raise ValueError("原始交易记录不存在")
@@ -309,13 +362,23 @@ async def process_refund(
     if refund_amount > original_tx.amount:
         raise ValueError("退款金额不能超过原始购买金额")
 
-    # Load B account
-    acc_result = await session.execute(
-        select(Account).where(Account.account_type == "B")
-    )
+    # Load B account -- filter by family
+    acc_stmt = select(Account).where(Account.account_type == "B")
+    if family_id is not None:
+        acc_stmt = acc_stmt.where(Account.family_id == family_id)
+    if user_id is not None:
+        acc_stmt = acc_stmt.where(Account.user_id == user_id)
+    acc_result = await session.execute(acc_stmt)
     account_b = acc_result.scalars().first()
     if account_b is None:
         raise ValueError("B账户不存在")
+
+    # Common kwargs for TransactionLog tenant fields
+    tx_tenant = {}
+    if family_id is not None:
+        tx_tenant["family_id"] = family_id
+    if user_id is not None:
+        tx_tenant["user_id"] = user_id
 
     # Refund goes back to the same pool it came from
     if original_tx.type == "purchase_debit_principal":
@@ -331,6 +394,7 @@ async def process_refund(
             balance_after=account_b.balance,
             charter_clause="§6.2",
             description=f"退款（本金）- 关联交易#{purchase_transaction_id}",
+            **tx_tenant,
         )
     else:
         interest_before = account_b.interest_pool
@@ -345,10 +409,12 @@ async def process_refund(
             balance_after=account_b.interest_pool,
             charter_clause="§6.2",
             description=f"退款（利息池）- 关联交易#{purchase_transaction_id}",
+            **tx_tenant,
         )
 
     session.add(tx)
     await session.flush()
+    await session.refresh(tx)
 
     logger.info(
         "refund_completed",

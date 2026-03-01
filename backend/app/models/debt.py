@@ -12,6 +12,8 @@ class Debt(Base):
     __tablename__ = "debt"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("family.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user.id"), nullable=False)
     original_amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     remaining_amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     reason: Mapped[str] = mapped_column(String(255), nullable=False)

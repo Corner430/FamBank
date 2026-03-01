@@ -33,3 +33,17 @@ class SettlementResponse(BaseModel):
     date: str
     steps: SettlementSteps
     balances_after: SettlementBalances
+
+
+class ChildSettlementResult(BaseModel):
+    child_id: int
+    child_name: str | None
+    settlement_id: int | None = None
+    status: str  # "completed" or "failed"
+    steps: SettlementSteps | None = None
+    error: str | None = None
+
+
+class FamilySettlementResponse(BaseModel):
+    settlement_date: str
+    results: list[ChildSettlementResult]

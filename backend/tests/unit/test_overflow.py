@@ -6,7 +6,6 @@ If B_principal == Cap_overflow → no overflow (strict greater than)
 Charter reference: §4.4
 """
 
-import pytest
 
 from app.services.overflow import calculate_overflow
 

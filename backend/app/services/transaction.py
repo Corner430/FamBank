@@ -1,6 +1,6 @@
 """Transaction query service: filtering, pagination for audit log.
 
-Charter reference: §18-19 (交易记录查询)
+Charter reference: S18-19 (交易记录查询)
 """
 
 from datetime import date
@@ -19,6 +19,9 @@ async def query_transactions(
     to_date: date | None = None,
     page: int = 1,
     per_page: int = 20,
+    *,
+    family_id: int | None = None,
+    user_id: int | None = None,
 ) -> dict:
     """Query transaction log with optional filters and pagination.
 
@@ -30,6 +33,8 @@ async def query_transactions(
         to_date: Include transactions on or before this date.
         page: Page number (1-based).
         per_page: Items per page (max 100).
+        family_id: Tenant family ID for multi-tenant isolation.
+        user_id: Optional user ID filter for per-child transaction views.
 
     Returns:
         Dict with "items" (list of TransactionLog) and "total" (int).
@@ -43,6 +48,14 @@ async def query_transactions(
 
     # Build base filter conditions
     conditions = []
+
+    # Multi-tenant isolation: always filter by family_id when provided
+    if family_id is not None:
+        conditions.append(TransactionLog.family_id == family_id)
+
+    # Optional per-user filter
+    if user_id is not None:
+        conditions.append(TransactionLog.user_id == user_id)
 
     if account is not None:
         conditions.append(

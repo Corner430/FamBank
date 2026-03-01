@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AnyUser, ParentUser
+from app.api.deps import ChildId, FamilyContext, ParentContext
 from app.database import get_db
 from app.models.violation import Violation
 from app.schemas.common import cents_to_yuan, yuan_to_cents
@@ -25,7 +25,8 @@ router = APIRouter(tags=["violations"])
 @router.post("/violations", response_model=ViolationResponse)
 async def create_violation(
     req: ViolationRequest,
-    user: ParentUser,
+    child_id_resolved: ChildId,
+    ctx: ParentContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Record and process a violation. Parent-only. §7"""
@@ -42,7 +43,9 @@ async def create_violation(
 
     try:
         result = await process_violation(
-            db, violation_cents, entered_a_cents, req.description
+            db, violation_cents, entered_a_cents, req.description,
+            family_id=ctx.family_id,
+            user_id=child_id_resolved,
         )
         await db.commit()
     except ValueError as e:
@@ -62,15 +65,26 @@ async def create_violation(
 
 @router.get("/violations", response_model=ViolationListResponse)
 async def list_violations(
-    user: AnyUser,
+    child_id_resolved: ChildId,
+    ctx: FamilyContext,
     db: AsyncSession = Depends(get_db),
 ):
-    """Get violation history. §7"""
-    count_result = await db.execute(select(func.count(Violation.id)))
+    """Get violation history for a child. §7"""
+    count_result = await db.execute(
+        select(func.count(Violation.id)).where(
+            Violation.family_id == ctx.family_id,
+            Violation.user_id == child_id_resolved,
+        )
+    )
     total = count_result.scalar_one()
 
     result = await db.execute(
-        select(Violation).order_by(Violation.violation_date.desc(), Violation.id.desc())
+        select(Violation)
+        .where(
+            Violation.family_id == ctx.family_id,
+            Violation.user_id == child_id_resolved,
+        )
+        .order_by(Violation.violation_date.desc(), Violation.id.desc())
     )
     violations = result.scalars().all()
 

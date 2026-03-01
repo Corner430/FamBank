@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, Enum, func
+from sqlalchemy import BigInteger, Date, DateTime, Enum, ForeignKey, UniqueConstraint, func
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,9 +11,14 @@ from app.models.base import Base
 
 class Settlement(Base):
     __tablename__ = "settlement"
+    __table_args__ = (
+        UniqueConstraint("user_id", "settlement_date", name="uq_settlement_user_date"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    settlement_date: Mapped[date] = mapped_column(Date, nullable=False, unique=True)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("family.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user.id"), nullable=False)
+    settlement_date: Mapped[date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(
         Enum("completed", "rolled_back"), nullable=False
     )

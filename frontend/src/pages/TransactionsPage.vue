@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { api } from '../services/api'
+import { ref, computed, onMounted } from 'vue'
+import { api, getStoredUser, ApiError } from '../services/api'
+import ChildSelector from '../components/ChildSelector.vue'
 import TransactionList from '../components/TransactionList.vue'
 
 interface TransactionItem {
@@ -24,6 +25,10 @@ interface TransactionListResponse {
   total_pages: number
 }
 
+const user = computed(() => getStoredUser())
+const isParent = computed(() => user.value?.role === 'parent')
+
+const childId = ref<number | null>(null)
 const items = ref<TransactionItem[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -38,11 +43,18 @@ const filterType = ref('')
 const filterFromDate = ref('')
 const filterToDate = ref('')
 
+function onChildSelect(id: number) {
+  childId.value = id
+  page.value = 1
+  loadTransactions()
+}
+
 async function loadTransactions() {
   loading.value = true
   error.value = ''
   try {
     const params = new URLSearchParams()
+    if (isParent.value && childId.value) params.set('child_id', String(childId.value))
     if (filterAccount.value) params.set('account', filterAccount.value)
     if (filterType.value) params.set('type', filterType.value)
     if (filterFromDate.value) params.set('from_date', filterFromDate.value)
@@ -56,7 +68,7 @@ async function loadTransactions() {
     total.value = res.total
     totalPages.value = res.total_pages
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : '加载失败'
+    error.value = e instanceof ApiError ? e.message : '加载失败'
   } finally {
     loading.value = false
   }
@@ -96,6 +108,8 @@ onMounted(loadTransactions)
 <template>
   <div class="transactions-page">
     <h1>交易记录</h1>
+
+    <ChildSelector v-if="isParent" @select="onChildSelect" />
 
     <div class="filters">
       <div class="filter-row">

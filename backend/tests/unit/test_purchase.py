@@ -5,7 +5,6 @@ deduction order (principal first, then interest pool).
 Charter reference: §4.6 (purchase), §6.2 (refund)
 """
 
-import pytest
 
 from app.services.purchase import calculate_deduction, validate_purchase_compliance
 

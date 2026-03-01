@@ -1,33 +1,45 @@
-"""PIN/password auth service with bcrypt hashing and session tokens."""
+"""JWT auth module: encode/decode tokens for phone+SMS authentication.
 
+Replaces the old PIN-based auth. JWT claims include user_id, family_id (nullable),
+and role (nullable). Access token expires in 24h, refresh token in 30d.
+"""
+
+import hashlib
 import os
 from datetime import UTC, datetime, timedelta
 
-import bcrypt
-from jose import jwt
+from jose import JWTError, jwt
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "fambank-dev-only-change-in-production")
 ALGORITHM = "HS256"
-TOKEN_EXPIRE_HOURS = 24
+ACCESS_TOKEN_EXPIRE_HOURS = 24
+REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 
-def hash_pin(pin: str) -> str:
-    """Hash a PIN/password with bcrypt."""
-    return bcrypt.hashpw(pin.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-
-def verify_pin(plain_pin: str, hashed_pin: str) -> bool:
-    """Verify a PIN/password against its hash."""
-    return bcrypt.checkpw(plain_pin.encode("utf-8"), hashed_pin.encode("utf-8"))
-
-
-def create_token(user_id: int, role: str) -> str:
-    """Create a JWT session token."""
-    expire = datetime.now(UTC) + timedelta(hours=TOKEN_EXPIRE_HOURS)
+def create_access_token(
+    user_id: int,
+    family_id: int | None = None,
+    role: str | None = None,
+) -> str:
+    """Create a JWT access token with user_id, family_id, and role claims."""
+    expire = datetime.now(UTC) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     payload = {
         "sub": str(user_id),
+        "family_id": family_id,
         "role": role,
         "exp": expire,
+        "type": "access",
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_refresh_token(user_id: int) -> str:
+    """Create a JWT refresh token (longer-lived, minimal claims)."""
+    expire = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    payload = {
+        "sub": str(user_id),
+        "exp": expire,
+        "type": "refresh",
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -37,5 +49,10 @@ def decode_token(token: str) -> dict | None:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except Exception:
+    except JWTError:
         return None
+
+
+def hash_token(token: str) -> str:
+    """Hash a refresh token for DB storage using SHA-256."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

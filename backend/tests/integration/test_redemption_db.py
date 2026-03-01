@@ -8,37 +8,20 @@ Requires MySQL connection.
 import pytest
 from httpx import AsyncClient
 
-PARENT_PIN = "parent1234"
-CHILD_PIN = "child1234"
-
-SETUP_PAYLOAD = {
-    "parent_name": "甲方",
-    "parent_pin": PARENT_PIN,
-    "child_name": "乙方",
-    "child_pin": CHILD_PIN,
-}
-
-
-async def _setup_and_login(client: AsyncClient, pin: str) -> str:
-    """Setup users and login, returning the auth token."""
-    await client.post("/api/v1/auth/setup", json=SETUP_PAYLOAD)
-    resp = await client.post("/api/v1/auth/login", json={"pin": pin})
-    return resp.json()["token"]
-
 
 def _auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-async def _fund_c_via_income(client: AsyncClient, token: str):
+async def _fund_c_via_income(client: AsyncClient, parent_token: str, child_id: int):
     """Fund accounts via income endpoint (default split: A 15%, B 30%, C 55%).
 
     Posting 2000.00 yuan income gives C ~1100.00 yuan.
     """
     resp = await client.post(
         "/api/v1/income",
-        json={"amount": "2000.00", "description": "测试收入"},
-        headers=_auth(token),
+        json={"amount": "2000.00", "description": "测试收入", "child_id": child_id},
+        headers=_auth(parent_token),
     )
     assert resp.status_code == 200
 
@@ -47,10 +30,11 @@ class TestRedemptionApproveFlow:
     """Full approve flow: child request → parent approve → balances update."""
 
     @pytest.mark.asyncio
-    async def test_full_approve_flow(self, async_client: AsyncClient):
-        parent_token = await _setup_and_login(async_client, PARENT_PIN)
-        child_token = await _setup_and_login(async_client, CHILD_PIN)
-        await _fund_c_via_income(async_client, parent_token)
+    async def test_full_approve_flow(self, async_client: AsyncClient, seeded_child):
+        parent_token = seeded_child["parent_token"]
+        child_token = seeded_child["child_token"]
+        child_id = seeded_child["child_id"]
+        await _fund_c_via_income(async_client, parent_token, child_id)
 
         # Child requests redemption
         req_resp = await async_client.post(
@@ -99,15 +83,19 @@ class TestRedemptionRejectFlow:
     """Reject flow: child request → parent reject → balances unchanged."""
 
     @pytest.mark.asyncio
-    async def test_reject_preserves_balances(self, async_client: AsyncClient):
-        parent_token = await _setup_and_login(async_client, PARENT_PIN)
-        child_token = await _setup_and_login(async_client, CHILD_PIN)
-        await _fund_c_via_income(async_client, parent_token)
+    async def test_reject_preserves_balances(
+        self, async_client: AsyncClient, seeded_child
+    ):
+        parent_token = seeded_child["parent_token"]
+        child_token = seeded_child["child_token"]
+        child_id = seeded_child["child_id"]
+        await _fund_c_via_income(async_client, parent_token, child_id)
 
         # Get C balance before
         accts_resp = await async_client.get(
             "/api/v1/accounts",
             headers=_auth(parent_token),
+            params={"child_id": child_id},
         )
         c_before = None
         for acc in accts_resp.json()["accounts"]:
@@ -136,6 +124,7 @@ class TestRedemptionRejectFlow:
         accts_resp2 = await async_client.get(
             "/api/v1/accounts",
             headers=_auth(parent_token),
+            params={"child_id": child_id},
         )
         for acc in accts_resp2.json()["accounts"]:
             if acc["type"] == "C":
@@ -147,10 +136,13 @@ class TestRedemptionDuplicateApproval:
     """Already approved/rejected record cannot be approved again."""
 
     @pytest.mark.asyncio
-    async def test_double_approve_returns_error(self, async_client: AsyncClient):
-        parent_token = await _setup_and_login(async_client, PARENT_PIN)
-        child_token = await _setup_and_login(async_client, CHILD_PIN)
-        await _fund_c_via_income(async_client, parent_token)
+    async def test_double_approve_returns_error(
+        self, async_client: AsyncClient, seeded_child
+    ):
+        parent_token = seeded_child["parent_token"]
+        child_token = seeded_child["child_token"]
+        child_id = seeded_child["child_id"]
+        await _fund_c_via_income(async_client, parent_token, child_id)
 
         req_resp = await async_client.post(
             "/api/v1/accounts/c/redemption/request",
@@ -181,7 +173,9 @@ class TestRedemptionAuth:
     """Auth and permission tests."""
 
     @pytest.mark.asyncio
-    async def test_unauthenticated_request_returns_401(self, async_client: AsyncClient):
+    async def test_unauthenticated_request_returns_401(
+        self, async_client: AsyncClient
+    ):
         resp = await async_client.post(
             "/api/v1/accounts/c/redemption/request",
             json={"amount": "100.00"},
@@ -189,15 +183,17 @@ class TestRedemptionAuth:
         assert resp.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_unauthenticated_pending_returns_401(self, async_client: AsyncClient):
+    async def test_unauthenticated_pending_returns_401(
+        self, async_client: AsyncClient
+    ):
         resp = await async_client.get("/api/v1/accounts/c/redemption/pending")
         assert resp.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_child_approve_returns_403(self, async_client: AsyncClient):
-        await _setup_and_login(async_client, PARENT_PIN)
-        child_token = await _setup_and_login(async_client, CHILD_PIN)
-
+    async def test_child_approve_returns_403(
+        self, async_client: AsyncClient, seeded_child
+    ):
+        child_token = seeded_child["child_token"]
         resp = await async_client.post(
             "/api/v1/accounts/c/redemption/approve",
             json={"id": 999, "approved": True},
@@ -210,9 +206,10 @@ class TestRedemptionPendingQuery:
     """Pending list query tests."""
 
     @pytest.mark.asyncio
-    async def test_empty_pending_list(self, async_client: AsyncClient):
-        parent_token = await _setup_and_login(async_client, PARENT_PIN)
-
+    async def test_empty_pending_list(
+        self, async_client: AsyncClient, seeded_child
+    ):
+        parent_token = seeded_child["parent_token"]
         resp = await async_client.get(
             "/api/v1/accounts/c/redemption/pending",
             headers=_auth(parent_token),
@@ -221,11 +218,14 @@ class TestRedemptionPendingQuery:
         assert resp.json()["requests"] == []
 
     @pytest.mark.asyncio
-    async def test_pending_persists_across_requests(self, async_client: AsyncClient):
+    async def test_pending_persists_across_requests(
+        self, async_client: AsyncClient, seeded_child
+    ):
         """Request then GET pending -- record should be present."""
-        parent_token = await _setup_and_login(async_client, PARENT_PIN)
-        child_token = await _setup_and_login(async_client, CHILD_PIN)
-        await _fund_c_via_income(async_client, parent_token)
+        parent_token = seeded_child["parent_token"]
+        child_token = seeded_child["child_token"]
+        child_id = seeded_child["child_id"]
+        await _fund_c_via_income(async_client, parent_token, child_id)
 
         # Child submits request
         await async_client.post(
@@ -245,11 +245,14 @@ class TestRedemptionPendingQuery:
         assert data["requests"][0]["reason"] == "测试"
 
     @pytest.mark.asyncio
-    async def test_child_sees_pending(self, async_client: AsyncClient):
+    async def test_child_sees_pending(
+        self, async_client: AsyncClient, seeded_child
+    ):
         """Child can also see the pending list."""
-        parent_token = await _setup_and_login(async_client, PARENT_PIN)
-        child_token = await _setup_and_login(async_client, CHILD_PIN)
-        await _fund_c_via_income(async_client, parent_token)
+        parent_token = seeded_child["parent_token"]
+        child_token = seeded_child["child_token"]
+        child_id = seeded_child["child_id"]
+        await _fund_c_via_income(async_client, parent_token, child_id)
 
         await async_client.post(
             "/api/v1/accounts/c/redemption/request",

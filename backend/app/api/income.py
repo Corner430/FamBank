@@ -1,10 +1,12 @@
 """Income API endpoint: POST /income."""
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AnyUser
+from app.api.deps import FamilyContext
 from app.database import get_db
+from app.models.user import User
 from app.schemas.common import cents_to_yuan, yuan_to_cents
 from app.schemas.income import IncomeBalances, IncomeRequest, IncomeResponse, IncomeSplitDetail
 from app.services.income import process_income
@@ -15,7 +17,7 @@ router = APIRouter(tags=["income"])
 @router.post("/income", response_model=IncomeResponse)
 async def create_income(
     req: IncomeRequest,
-    user: AnyUser,
+    ctx: FamilyContext,
     db: AsyncSession = Depends(get_db),
 ):
     """Record income and auto-split to A/B/C accounts. §2"""
@@ -27,8 +29,31 @@ async def create_income(
     if amount_cents <= 0:
         raise HTTPException(status_code=400, detail="收入金额必须为正数")
 
+    # Resolve target child
+    if ctx.role == "child":
+        target_user_id = ctx.user_id
+    else:
+        # Parent must specify child_id
+        if req.child_id is None:
+            raise HTTPException(status_code=400, detail="请指定目标孩子 (child_id)")
+        # Validate child belongs to family
+        result = await db.execute(
+            select(User).where(
+                User.id == req.child_id,
+                User.family_id == ctx.family_id,
+                User.role == "child",
+            )
+        )
+        if result.scalars().first() is None:
+            raise HTTPException(status_code=404, detail="指定的孩子不存在或不属于您的家庭")
+        target_user_id = req.child_id
+
     try:
-        result = await process_income(db, amount_cents, req.description)
+        result = await process_income(
+            db, amount_cents, req.description,
+            family_id=ctx.family_id,
+            user_id=target_user_id,
+        )
         await db.commit()
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

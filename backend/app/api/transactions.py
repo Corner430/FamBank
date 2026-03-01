@@ -9,7 +9,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import AnyUser
+from app.api.deps import ChildId, FamilyContext
 from app.database import get_db
 from app.schemas.common import cents_to_yuan
 from app.schemas.transaction import TransactionItem, TransactionListResponse
@@ -20,7 +20,8 @@ router = APIRouter(tags=["transactions"])
 
 @router.get("/transactions", response_model=TransactionListResponse)
 async def list_transactions(
-    user: AnyUser,
+    child_id_resolved: ChildId,
+    ctx: FamilyContext,
     account: str | None = Query(None, description="Filter by account (A/B/C)"),
     type: str | None = Query(None, description="Filter by transaction type"),
     from_date: date | None = Query(None, description="Start date (inclusive)"),
@@ -38,6 +39,8 @@ async def list_transactions(
         to_date=to_date,
         page=page,
         per_page=per_page,
+        family_id=ctx.family_id,
+        user_id=child_id_resolved,
     )
 
     items = [

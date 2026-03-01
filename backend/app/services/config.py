@@ -1,7 +1,8 @@
 """Config service: read/announce/apply parameter changes (charter S8).
 
 Supports:
-- get_all_config: list all current config values
+- init_default_config: create default config values for a new family
+- get_all_config: list all current config values for a family
 - announce_change: schedule a parameter change for next month 1st
 - apply_pending_announcements: activate announcements during settlement
 """
@@ -9,25 +10,63 @@ Supports:
 from datetime import date
 
 import structlog
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.config import Announcement, Config
 
 logger = structlog.get_logger("config")
 
+# Charter default values (from seed.sql reference)
+DEFAULT_CONFIG = {
+    "split_ratio_a": "15",
+    "split_ratio_b": "30",
+    "split_ratio_c": "55",
+    "b_tier1_rate": "200",
+    "b_tier1_limit": "100000",
+    "b_tier2_rate": "120",
+    "b_tier3_rate": "30",
+    "c_annual_rate": "500",
+    "penalty_multiplier": "2",
+    "redemption_fee_rate": "10",
+    "wishlist_lock_months": "3",
+    "wishlist_valid_months": "12",
+    "b_suspend_months": "12",
+    "c_lock_age": "18",
+}
 
-async def get_all_config(session: AsyncSession) -> list[dict]:
+
+async def init_default_config(family_id: int, session: AsyncSession) -> None:
+    """Insert default config values for a newly created family.
+
+    Called during family creation to initialize all charter parameters.
+    """
+    today = date.today()
+    for key, value in DEFAULT_CONFIG.items():
+        config = Config(
+            family_id=family_id,
+            key=key,
+            value=value,
+            effective_from=today,
+        )
+        session.add(config)
+    await session.flush()
+    logger.info("default_config_initialized", family_id=family_id, config_count=len(DEFAULT_CONFIG))
+
+
+async def get_all_config(session: AsyncSession, family_id: int | None = None) -> list[dict]:
     """Return all current config values.
 
     For each key, returns the most recent effective entry.
+    If family_id is provided, filters by family.
 
     Returns:
         List of dicts with key, value, effective_from.
     """
-    result = await session.execute(
-        select(Config).order_by(Config.key, Config.effective_from.desc())
-    )
+    query = select(Config).order_by(Config.key, Config.effective_from.desc())
+    if family_id is not None:
+        query = query.where(Config.family_id == family_id)
+    result = await session.execute(query)
     rows = result.scalars().all()
 
     # Deduplicate: keep only the latest effective value per key
@@ -48,6 +87,7 @@ async def announce_change(
     key: str,
     new_value: str,
     reason: str = "",
+    family_id: int | None = None,
 ) -> dict:
     """Announce a config parameter change.
 
@@ -64,15 +104,12 @@ async def announce_change(
         Dict with announcement details.
     """
     # Get current value for this key
-    result = await session.execute(
-        text(
-            "SELECT value FROM config WHERE `key` = :k "
-            "ORDER BY effective_from DESC LIMIT 1"
-        ),
-        {"k": key},
-    )
-    row = result.fetchone()
-    old_value = row[0] if row else ""
+    query = select(Config).where(Config.key == key).order_by(Config.effective_from.desc()).limit(1)
+    if family_id is not None:
+        query = query.where(Config.family_id == family_id)
+    result = await session.execute(query)
+    row = result.scalars().first()
+    old_value = row.value if row else ""
 
     # Calculate next month 1st
     today = date.today()
@@ -83,6 +120,7 @@ async def announce_change(
 
     # Create announcement
     announcement = Announcement(
+        family_id=family_id,
         config_key=key,
         old_value=old_value,
         new_value=new_value,
@@ -115,6 +153,8 @@ async def announce_change(
 async def apply_pending_announcements(
     session: AsyncSession,
     settlement_date: date,
+    *,
+    family_id: int,
 ) -> list[dict]:
     """Apply announcements whose effective_from <= settlement_date.
 
@@ -128,6 +168,7 @@ async def apply_pending_announcements(
     result = await session.execute(
         select(Announcement).where(
             Announcement.effective_from <= settlement_date,
+            Announcement.family_id == family_id,
         )
     )
     announcements = result.scalars().all()
@@ -139,6 +180,7 @@ async def apply_pending_announcements(
         # Check if this announcement's config change has already been applied
         existing = await session.execute(
             select(Config).where(
+                Config.family_id == family_id,
                 Config.key == ann.config_key,
                 Config.effective_from == ann.effective_from,
                 Config.value == ann.new_value,
@@ -149,6 +191,7 @@ async def apply_pending_announcements(
 
         # Create new config entry with the announced value
         new_config = Config(
+            family_id=ann.family_id,
             key=ann.config_key,
             value=ann.new_value,
             effective_from=ann.effective_from,

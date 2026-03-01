@@ -1,69 +1,87 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { api, setToken, setStoredUser, ApiError } from '../services/api'
+import { sendCode, verifyCode, setToken, setRefreshToken, setStoredUser, ApiError } from '../services/api'
 
 const router = useRouter()
-const pin = ref('')
+const phone = ref('')
+const code = ref('')
 const error = ref('')
 const loading = ref(false)
-const needsSetup = ref(false)
+const codeSent = ref(false)
+const countdown = ref(0)
 
-// Setup form
-const parentName = ref('爸爸')
-const parentPin = ref('')
-const childName = ref('')
-const childPin = ref('')
-const childBirthDate = ref('')
+let countdownTimer: ReturnType<typeof setInterval> | null = null
 
-onMounted(async () => {
-  try {
-    const status = await api.get<{ initialized: boolean }>('/auth/status')
-    needsSetup.value = !status.initialized
-  } catch {
-    error.value = '无法连接服务器'
+const phoneValid = computed(() => /^1\d{10}$/.test(phone.value))
+const codeValid = computed(() => /^\d{6}$/.test(code.value))
+
+function startCountdown() {
+  countdown.value = 60
+  countdownTimer = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      if (countdownTimer) clearInterval(countdownTimer)
+      countdownTimer = null
+    }
+  }, 1000)
+}
+
+onBeforeUnmount(() => {
+  if (countdownTimer) {
+    clearInterval(countdownTimer)
+    countdownTimer = null
   }
 })
 
-async function handleLogin() {
+async function handleSendCode() {
+  if (!phoneValid.value) {
+    error.value = '请输入正确的11位手机号'
+    return
+  }
   error.value = ''
   loading.value = true
   try {
-    const res = await api.post<{ user: { id: number; role: string; name: string }; token: string }>(
-      '/auth/login',
-      { pin: pin.value }
-    )
-    setToken(res.token)
-    setStoredUser(res.user)
-    router.push('/')
+    await sendCode(phone.value)
+    codeSent.value = true
+    startCountdown()
   } catch (e) {
     if (e instanceof ApiError) {
       error.value = e.message
     } else {
-      error.value = '登录失败'
+      error.value = '发送验证码失败'
     }
   } finally {
     loading.value = false
   }
 }
 
-async function handleSetup() {
+async function handleVerify() {
+  if (!codeValid.value) {
+    error.value = '请输入6位数字验证码'
+    return
+  }
   error.value = ''
   loading.value = true
   try {
-    await api.post('/auth/setup', {
-      parent_name: parentName.value,
-      parent_pin: parentPin.value,
-      child_name: childName.value,
-      child_pin: childPin.value,
-      child_birth_date: childBirthDate.value || null,
-    })
-    needsSetup.value = false
+    const res = await verifyCode(phone.value, code.value)
+    setToken(res.access_token)
+    setRefreshToken(res.refresh_token)
+    setStoredUser(res.user)
+
+    // Redirect based on user state
+    if (res.user.family_id === null) {
+      router.push('/onboarding')
+    } else if (res.user.role === 'parent') {
+      router.push('/dashboard')
+    } else {
+      router.push('/')
+    }
   } catch (e) {
     if (e instanceof ApiError) {
       error.value = e.message
     } else {
-      error.value = '初始化失败'
+      error.value = '验证失败'
     }
   } finally {
     loading.value = false
@@ -75,49 +93,63 @@ async function handleSetup() {
   <div class="login-page">
     <h1>FamBank 家庭内部银行</h1>
 
-    <div v-if="needsSetup" class="setup-form">
-      <h2>首次设置</h2>
-      <div class="form-group">
-        <label>甲方（家长）名称</label>
-        <input v-model="parentName" type="text" placeholder="如：爸爸" />
-      </div>
-      <div class="form-group">
-        <label>甲方管理密码</label>
-        <input v-model="parentPin" type="password" placeholder="设置管理密码" />
-      </div>
-      <div class="form-group">
-        <label>乙方（孩子）名称</label>
-        <input v-model="childName" type="text" placeholder="如：小明" />
-      </div>
-      <div class="form-group">
-        <label>乙方 PIN 码</label>
-        <input v-model="childPin" type="password" placeholder="设置简单 PIN 码" />
-      </div>
-      <div class="form-group">
-        <label>乙方出生日期（可选）</label>
-        <input v-model="childBirthDate" type="date" />
-      </div>
-      <button @click="handleSetup" :disabled="loading || !parentPin || !childName || !childPin">
-        {{ loading ? '初始化中...' : '完成设置' }}
-      </button>
-    </div>
+    <div class="login-form">
+      <h2>手机号登录</h2>
 
-    <div v-else class="login-form">
-      <h2>请输入 PIN 码登录</h2>
       <div class="form-group">
+        <label>手机号</label>
         <input
-          v-model="pin"
-          type="password"
-          placeholder="输入 PIN 码 / 密码"
-          @keyup.enter="handleLogin"
+          v-model="phone"
+          type="tel"
+          maxlength="11"
+          placeholder="请输入手机号"
+          :disabled="codeSent && countdown > 0"
+          @keyup.enter="codeSent ? handleVerify() : handleSendCode()"
         />
+        <p v-if="phone && !phoneValid" class="field-error">请输入正确的11位手机号</p>
       </div>
-      <button @click="handleLogin" :disabled="loading || !pin">
-        {{ loading ? '登录中...' : '登录' }}
-      </button>
-    </div>
 
-    <p v-if="error" class="error">{{ error }}</p>
+      <div v-if="!codeSent" class="actions">
+        <button
+          @click="handleSendCode"
+          :disabled="loading || !phoneValid"
+        >
+          {{ loading ? '发送中...' : '获取验证码' }}
+        </button>
+      </div>
+
+      <template v-else>
+        <div class="form-group">
+          <label>验证码</label>
+          <input
+            v-model="code"
+            type="text"
+            maxlength="6"
+            inputmode="numeric"
+            placeholder="请输入6位验证码"
+            @keyup.enter="handleVerify"
+          />
+        </div>
+
+        <div class="actions">
+          <button
+            @click="handleVerify"
+            :disabled="loading || !codeValid"
+          >
+            {{ loading ? '登录中...' : '登录 / 注册' }}
+          </button>
+          <button
+            class="resend-btn"
+            @click="handleSendCode"
+            :disabled="countdown > 0 || loading"
+          >
+            {{ countdown > 0 ? `重新发送 (${countdown}s)` : '重新发送' }}
+          </button>
+        </div>
+      </template>
+
+      <p v-if="error" class="error">{{ error }}</p>
+    </div>
   </div>
 </template>
 
@@ -159,6 +191,18 @@ h2 {
   box-sizing: border-box;
 }
 
+.field-error {
+  color: #e74c3c;
+  font-size: 0.85em;
+  margin-top: 4px;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 button {
   width: 100%;
   padding: 12px;
@@ -173,6 +217,17 @@ button {
 button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.resend-btn {
+  background: transparent;
+  color: #4a90d9;
+  border: 1px solid #4a90d9;
+}
+
+.resend-btn:disabled {
+  color: #999;
+  border-color: #ddd;
 }
 
 .error {

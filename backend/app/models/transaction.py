@@ -12,6 +12,8 @@ class TransactionLog(Base):
     __tablename__ = "transaction_log"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("family.id"), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("user.id"), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )

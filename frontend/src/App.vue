@@ -1,20 +1,34 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
-import { currentUser, clearToken, clearStoredUser } from './services/api'
+import { computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { currentUser, logout as doLogout } from './services/api'
 
 const router = useRouter()
+const route = useRoute()
 const user = currentUser
 
+const showNav = computed(() => {
+  if (!user.value) return false
+  if (!user.value.family_id) return false
+  if (route.name === 'login' || route.name === 'onboarding') return false
+  return true
+})
+
+const roleLabel = computed(() => {
+  if (user.value?.role === 'parent') return '甲方'
+  if (user.value?.role === 'child') return '乙方'
+  return ''
+})
+
 function logout() {
-  clearToken()
-  clearStoredUser()
+  doLogout()
   router.push('/login')
 }
 </script>
 
 <template>
   <div id="app-root">
-    <nav v-if="user" class="navbar">
+    <nav v-if="showNav" class="navbar">
       <div class="nav-brand">
         <router-link to="/">FamBank</router-link>
       </div>
@@ -29,7 +43,7 @@ function logout() {
         <router-link v-if="user?.role === 'parent'" to="/settings">设置</router-link>
       </div>
       <div class="nav-user">
-        <span>{{ user?.name }} ({{ user?.role === 'parent' ? '甲方' : '乙方' }})</span>
+        <span>{{ user?.name || '用户' }} ({{ roleLabel }})</span>
         <button @click="logout" class="btn-logout">退出</button>
       </div>
     </nav>

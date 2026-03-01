@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { api, getStoredUser } from '../services/api'
+import { ref, computed, onMounted } from 'vue'
+import { api, getStoredUser, ApiError } from '../services/api'
+import ChildSelector from '../components/ChildSelector.vue'
 
 interface ViolationItem {
   id: number
@@ -36,18 +37,25 @@ const submitLoading = ref(false)
 const submitError = ref('')
 const result = ref<ViolationResponse | null>(null)
 
+const childId = ref<number | null>(null)
 const user = computed(() => getStoredUser())
 const isParent = computed(() => user.value?.role === 'parent')
+
+function onChildSelect(id: number) {
+  childId.value = id
+  loadViolations()
+}
 
 async function loadViolations() {
   loading.value = true
   error.value = ''
   try {
-    const res = await api.get<{ items: ViolationItem[]; total: number }>('/violations')
+    const params = isParent.value && childId.value ? `?child_id=${childId.value}` : ''
+    const res = await api.get<{ items: ViolationItem[]; total: number }>(`/violations${params}`)
     violations.value = res.items
     totalViolations.value = res.total
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : '加载失败'
+    error.value = e instanceof ApiError ? e.message : '加载失败'
   } finally {
     loading.value = false
   }
@@ -58,18 +66,22 @@ async function submitViolation() {
   submitError.value = ''
   result.value = null
   try {
-    const res = await api.post<ViolationResponse>('/violations', {
+    const body: Record<string, unknown> = {
       violation_amount: violationAmount.value,
       amount_entered_a: enteredA.value,
       description: description.value,
-    })
+    }
+    if (isParent.value && childId.value) {
+      body.child_id = childId.value
+    }
+    const res = await api.post<ViolationResponse>('/violations', body)
     result.value = res
     violationAmount.value = ''
     enteredA.value = '0.00'
     description.value = ''
     await loadViolations()
   } catch (e: unknown) {
-    submitError.value = e instanceof Error ? e.message : '提交失败'
+    submitError.value = e instanceof ApiError ? e.message : '提交失败'
   } finally {
     submitLoading.value = false
   }
@@ -81,6 +93,8 @@ onMounted(loadViolations)
 <template>
   <div class="violation-page">
     <h1>违约处理</h1>
+
+    <ChildSelector v-if="isParent" @select="onChildSelect" />
 
     <!-- Entry Form (parent only) -->
     <div v-if="isParent" class="section-card">
