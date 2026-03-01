@@ -139,3 +139,19 @@ CREATE TABLE IF NOT EXISTS escrow (
     released_at DATETIME NULL,
     CHECK (amount > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS redemption_request (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    amount BIGINT NOT NULL,
+    fee BIGINT NOT NULL,
+    net BIGINT NOT NULL,
+    reason VARCHAR(255) NOT NULL DEFAULT '',
+    status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+    requested_by BIGINT NOT NULL,
+    reviewed_by BIGINT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at DATETIME NULL,
+    FOREIGN KEY (requested_by) REFERENCES `user`(id),
+    FOREIGN KEY (reviewed_by) REFERENCES `user`(id),
+    CHECK (amount > 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

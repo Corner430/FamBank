@@ -1,14 +1,17 @@
 """C Redemption service (charter S5).
 
 Converts C balance to A balance with a 10% fee.
-Uses a two-step flow: request (validate) then approve (execute).
+Uses a two-step flow: request (persist) then approve/reject (execute).
 """
+
+from datetime import UTC, datetime
 
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import Account
+from app.models.redemption_request import RedemptionRequest
 from app.models.transaction import TransactionLog
 
 logger = structlog.get_logger("redemption")
@@ -44,15 +47,15 @@ def calculate_redemption_fee(
 async def request_redemption(
     session: AsyncSession,
     amount_cents: int,
+    user_id: int,
     reason: str = "",
 ) -> dict:
-    """Validate and preview a C redemption request.
+    """Validate and persist a C redemption request.
 
-    Checks C balance is sufficient, calculates fee and net.
-    Does NOT execute -- just returns pending info for parent approval.
+    Creates a RedemptionRequest record in the database with status='pending'.
 
     Returns:
-        Dict with amount, fee, net, reason for the pending request.
+        Dict with id, amount, fee, net, c_balance, reason, status, created_at.
 
     Raises:
         ValueError: If amount invalid or balance insufficient.
@@ -60,7 +63,7 @@ async def request_redemption(
     if amount_cents <= 0:
         raise ValueError("赎回金额必须为正数")
 
-    logger.info("redemption_requested", amount_cents=amount_cents, reason=reason)
+    logger.info("redemption_requested", amount_cents=amount_cents, reason=reason, user_id=user_id)
 
     # Load C account
     result = await session.execute(
@@ -75,23 +78,37 @@ async def request_redemption(
 
     fee, net = calculate_redemption_fee(amount_cents)
 
+    record = RedemptionRequest(
+        amount=amount_cents,
+        fee=fee,
+        net=net,
+        reason=reason,
+        status="pending",
+        requested_by=user_id,
+    )
+    session.add(record)
+    await session.flush()
+    await session.refresh(record)
+
     return {
+        "id": record.id,
         "amount": amount_cents,
         "fee": fee,
         "net": net,
         "c_balance": account_c.balance,
         "reason": reason,
         "status": "pending",
+        "created_at": record.created_at.isoformat() if record.created_at else "",
     }
 
 
 async def approve_redemption(
     session: AsyncSession,
-    amount_cents: int,
+    request_id: int,
     approved: bool,
-    reason: str = "",
+    reviewer_id: int,
 ) -> dict:
-    """Approve or reject a pending C redemption.
+    """Approve or reject a pending C redemption by record id.
 
     If approved:
       - Deduct amount from C
@@ -102,16 +119,32 @@ async def approve_redemption(
     Returns:
         Dict with result details.
     """
-    if not approved:
-        logger.info("redemption_rejected", amount_cents=amount_cents, reason=reason)
-        return {
-            "status": "rejected",
-            "amount": amount_cents,
-            "reason": reason,
-        }
+    # Load the redemption request
+    result = await session.execute(
+        select(RedemptionRequest).where(RedemptionRequest.id == request_id)
+    )
+    record = result.scalars().first()
+    if not record:
+        raise ValueError("赎回请求不存在")
 
-    if amount_cents <= 0:
-        raise ValueError("赎回金额必须为正数")
+    if record.status != "pending":
+        raise ValueError("该赎回请求已处理")
+
+    now = datetime.now(tz=UTC).replace(tzinfo=None)
+
+    if not approved:
+        record.status = "rejected"
+        record.reviewed_by = reviewer_id
+        record.reviewed_at = now
+        await session.flush()
+
+        logger.info("redemption_rejected", request_id=request_id, reviewer_id=reviewer_id)
+        return {
+            "id": record.id,
+            "status": "rejected",
+            "amount": record.amount,
+            "reason": record.reason,
+        }
 
     # Load accounts
     result = await session.execute(
@@ -124,59 +157,95 @@ async def approve_redemption(
     if not account_a or not account_c:
         raise RuntimeError("系统未初始化：缺少账户")
 
-    if account_c.balance < amount_cents:
+    if account_c.balance < record.amount:
         raise ValueError("C账户余额不足")
-
-    fee, net = calculate_redemption_fee(amount_cents)
 
     # Deduct full amount from C
     c_before = account_c.balance
-    account_c.balance -= amount_cents
+    account_c.balance -= record.amount
 
     # Record fee transaction (C -> fee, money leaves the system)
     session.add(TransactionLog(
         type="c_redemption_fee",
         source_account="C",
         target_account=None,
-        amount=fee,
+        amount=record.fee,
         balance_before=c_before,
         balance_after=account_c.balance,
         charter_clause="第5条",
-        description=f"C赎回手续费：{reason}" if reason else "C赎回手续费",
+        description=f"C赎回手续费：{record.reason}" if record.reason else "C赎回手续费",
     ))
 
     # Add net to A
     a_before = account_a.balance
-    account_a.balance += net
+    account_a.balance += record.net
 
     session.add(TransactionLog(
         type="c_redemption",
         source_account="C",
         target_account="A",
-        amount=net,
+        amount=record.net,
         balance_before=a_before,
         balance_after=account_a.balance,
         charter_clause="第5条",
-        description=f"C赎回到A：{reason}" if reason else "C赎回到A",
+        description=f"C赎回到A：{record.reason}" if record.reason else "C赎回到A",
     ))
+
+    # Update record status
+    record.status = "approved"
+    record.reviewed_by = reviewer_id
+    record.reviewed_at = now
 
     await session.flush()
 
     logger.info(
         "redemption_approved",
-        amount_cents=amount_cents,
-        fee=fee,
-        net=net,
+        request_id=request_id,
+        amount_cents=record.amount,
+        fee=record.fee,
+        net=record.net,
         c_balance_after=account_c.balance,
         a_balance_after=account_a.balance,
     )
 
     return {
+        "id": record.id,
         "status": "approved",
-        "amount": amount_cents,
-        "fee": fee,
-        "net": net,
+        "amount": record.amount,
+        "fee": record.fee,
+        "net": record.net,
         "c_balance_after": account_c.balance,
         "a_balance_after": account_a.balance,
-        "reason": reason,
+        "reason": record.reason,
     }
+
+
+async def get_pending_redemptions(session: AsyncSession) -> list[dict]:
+    """Query all pending redemption requests."""
+    result = await session.execute(
+        select(RedemptionRequest)
+        .where(RedemptionRequest.status == "pending")
+        .order_by(RedemptionRequest.created_at.asc())
+    )
+    records = result.scalars().all()
+
+    # Also load current C balance for display
+    c_result = await session.execute(
+        select(Account).where(Account.account_type == "C")
+    )
+    account_c = c_result.scalars().first()
+    c_balance = account_c.balance if account_c else 0
+
+    return [
+        {
+            "id": r.id,
+            "amount": r.amount,
+            "fee": r.fee,
+            "net": r.net,
+            "c_balance": c_balance,
+            "reason": r.reason,
+            "status": r.status,
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+        }
+        for r in records
+    ]

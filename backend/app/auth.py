@@ -1,11 +1,12 @@
 """PIN/password auth service with bcrypt hashing and session tokens."""
 
+import os
 from datetime import UTC, datetime, timedelta
 
 import bcrypt
 from jose import jwt
 
-SECRET_KEY = "fambank-secret-key-change-in-production"
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "fambank-dev-only-change-in-production")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 24
 
