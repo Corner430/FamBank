@@ -36,7 +36,7 @@ FamBank 实现了一套完整的三账户资产管理体系：
 | 数据库密码 | 通过 `.env` 文件配置，**已被 `.gitignore` 排除**，不会提交到仓库 |
 | JWT 签名密钥 | 通过环境变量 `JWT_SECRET_KEY` 配置，生产环境必须替换默认值 |
 | 服务器 SSH 密钥 | 存储在 GitHub Secrets（`SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`），不在代码中 |
-| 用户 PIN 码 | bcrypt 单向哈希存储，数据库中无明文 |
+| 短信验证码 | 数据库存储，有效期 5 分钟，过期自动失效；防暴力：60 秒发送冷却 + 5 次尝试上限 |
 
 ### .gitignore 保护
 
@@ -136,12 +136,10 @@ cd backend && uv sync && cd ..
 ```bash
 # 本地
 mysql -u fambank -pfambank fambank < backend/app/migrations/init.sql
-mysql -u fambank -pfambank fambank < backend/app/migrations/triggers.sql
 mysql -u fambank -pfambank fambank < backend/app/migrations/seed.sql
 
 # 云数据库
 mysql -h <你的主机> -P 3306 -u fambank -p fambank < backend/app/migrations/init.sql
-mysql -h <你的主机> -P 3306 -u fambank -p fambank < backend/app/migrations/triggers.sql
 mysql -h <你的主机> -P 3306 -u fambank -p fambank < backend/app/migrations/seed.sql
 ```
 
@@ -164,13 +162,13 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 ### 8. 初始化系统
 
-首次打开页面会引导创建家长和孩子账号（设置 PIN 码）。
+首次打开页面，通过手机号 + 短信验证码注册，创建家庭后生成邀请码邀请其他成员加入。
 
 ## 使用指南
 
 ### 登录
 
-家长和孩子各有自己的 PIN 码。登录后根据角色显示不同的功能菜单。
+使用手机号接收短信验证码登录。登录后根据角色（家长/孩子）显示不同功能。
 
 ### 记录收入
 
@@ -229,31 +227,39 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
-| POST | /auth/setup | 首次初始化 | 公开 |
-| POST | /auth/login | 登录获取 token | 公开 |
-| GET | /auth/status | 检查是否已初始化 | 公开 |
-| GET | /accounts | 查看三账户余额 | 任意 |
-| POST | /income | 记录收入 | 任意 |
-| POST | /accounts/a/spend | A 消费 | 任意 |
-| POST | /accounts/b/purchase | B 购买 | 任意 |
+| POST | /auth/send-code | 发送短信验证码 | 公开 |
+| POST | /auth/verify-code | 验证短信码，登录/注册 | 公开 |
+| POST | /auth/refresh | 刷新 access token | 公开 |
+| POST | /family | 创建家庭 | 已登录 |
+| GET | /family | 查看家庭详情及成员 | 家庭成员 |
+| POST | /family/invitations | 创建邀请码 | 家长 |
+| GET | /family/invitations | 查看邀请码列表 | 家长 |
+| DELETE | /family/invitations/{id} | 撤销邀请码 | 家长 |
+| POST | /family/join | 通过邀请码加入家庭 | 已登录 |
+| GET | /family/dashboard | 家庭总览（全部孩子资产） | 家长 |
+| GET | /accounts | 查看三账户余额 | 家庭成员 |
+| POST | /accounts/a/spend | A 消费 | 家庭成员 |
+| POST | /accounts/b/purchase | B 购买 | 家庭成员 |
 | POST | /accounts/b/purchase/approve | 审批替代品购买 | 家长 |
 | POST | /accounts/b/refund | B 退款 | 家长 |
+| POST | /income | 记录收入 | 家庭成员 |
 | POST | /settlement | 执行月度结算 | 家长 |
 | GET | /settlements | 结算历史 | 家长 |
-| POST | /accounts/c/redemption/request | C 赎回申请 | 任意 |
+| POST | /accounts/c/redemption/request | C 赎回申请 | 家庭成员 |
 | POST | /accounts/c/redemption/approve | 审批 C 赎回 | 家长 |
-| GET | /accounts/c/redemption/pending | 查看待审批赎回 | 任意 |
-| GET | /wishlist | 查看愿望清单 | 任意 |
+| GET | /accounts/c/redemption/pending | 查看待审批赎回 | 家庭成员 |
+| GET | /wishlist | 查看愿望清单 | 家庭成员 |
 | POST | /wishlist | 创建愿望清单 | 家长 |
-| PATCH | /wishlist/items/{id}/price | 更新物品价格 | 任意 |
-| POST | /wishlist/declare-target | 声明目标物品 | 任意 |
-| DELETE | /wishlist/declare-target | 清除目标 | 任意 |
-| GET | /transactions | 交易记录查询 | 任意 |
+| PATCH | /wishlist/items/{id}/price | 更新物品价格 | 家庭成员 |
+| POST | /wishlist/declare-target | 声明目标物品 | 家庭成员 |
+| DELETE | /wishlist/declare-target | 清除目标 | 家庭成员 |
+| GET | /transactions | 交易记录查询 | 家庭成员 |
 | POST | /violations | 记录违约 | 家长 |
-| GET | /violations | 违约历史 | 任意 |
+| GET | /violations | 违约历史 | 家庭成员 |
 | GET | /config | 查看配置参数 | 家长 |
 | POST | /config/announce | 公告参数调整 | 家长 |
 | GET | /config/announcements | 公告列表 | 家长 |
+| GET | /health | 健康检查 | 公开 |
 
 详细接口文档请访问 Swagger UI：http://localhost:8000/docs
 
@@ -263,13 +269,13 @@ uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
 FamBank/
 ├── backend/
 │   ├── app/
-│   │   ├── api/           # FastAPI 路由（9 个模块）
-│   │   ├── models/        # SQLAlchemy ORM 模型
+│   │   ├── api/           # FastAPI 路由（11 个模块）
+│   │   ├── models/        # SQLAlchemy ORM 模型（15 个模型文件）
 │   │   ├── schemas/       # Pydantic 请求/响应模型
-│   │   ├── services/      # 业务逻辑层
-│   │   ├── migrations/    # SQL 建表、触发器、种子数据
+│   │   ├── services/      # 业务逻辑层（16 个服务文件）
+│   │   ├── migrations/    # SQL 建表、种子数据
 │   │   ├── middleware/    # 请求日志中间件
-│   │   ├── auth.py        # JWT + bcrypt 认证
+│   │   ├── auth.py        # JWT 认证工具
 │   │   ├── database.py    # 异步数据库连接
 │   │   ├── logging_config.py # structlog 结构化日志配置
 │   │   └── main.py        # FastAPI 入口
@@ -279,11 +285,14 @@ FamBank/
 │   └── pyproject.toml
 ├── frontend/
 │   ├── src/
-│   │   ├── pages/         # 8 个 Vue 页面
-│   │   ├── components/    # 可复用组件
+│   │   ├── pages/         # 11 个 Vue 页面
+│   │   ├── components/    # 7 个可复用组件
 │   │   ├── services/      # API 调用层
 │   │   └── router/        # Vue Router 配置
 │   └── package.json
+├── specs/
+│   ├── 001-fambank-core/          # 核心功能设计文档
+│   └── 002-multi-tenant-platform/ # 多租户平台设计文档
 ├── deploy/
 │   ├── fambank.service    # systemd 服务单元
 │   └── setup.sh           # 一键部署脚本
@@ -299,7 +308,7 @@ FamBank/
 # 创建测试数据库（首次）
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS fambank_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL ON fambank_test.* TO 'fambank'@'localhost';"
 
-# 运行全部测试（124 个）
+# 运行全部测试（105 个）
 cd backend && uv run pytest tests/ -v
 ```
 
@@ -404,7 +413,6 @@ JWT_SECRET_KEY=<随机密钥>
 
 ```bash
 mysql -u fambank -p fambank < backend/app/migrations/init.sql
-mysql -u fambank -p fambank < backend/app/migrations/triggers.sql
 mysql -u fambank -p fambank < backend/app/migrations/seed.sql
 ```
 
@@ -494,7 +502,7 @@ sudo visudo
 
 ```
 checkout → 启动临时 MySQL 8.0 容器
-→ uv sync → ruff check（lint）→ pytest（124 个测试）
+→ uv sync → ruff check（lint）→ pytest（105 个测试）
 → npm ci → npm run build（前端编译检查）
 ```
 
@@ -517,7 +525,8 @@ PR 只跑 test 不触发部署。
 ## 设计原则
 
 - **金额精度**：所有金额以「分」（cents）为单位在后端和数据库中流转，API 层自动进行元/分转换
-- **不可篡改审计**：transaction_log 表通过数据库触发器禁止 UPDATE 和 DELETE
+- **仅追加审计**：transaction_log 仅允许 INSERT，保证审计记录不可篡改
 - **原子结算**：结算 SOP 使用 MySQL advisory lock 防止并发
+- **租户隔离**：多租户架构下，每个家庭的数据通过 family_id 严格隔离，JWT 令牌携带租户上下文
 - **角色隔离**：家长和孩子有不同的操作权限
 - **隐私保护**：所有密码/密钥通过环境变量配置，敏感文件不入库

@@ -18,15 +18,34 @@ backend/
   app/
     main.py, auth.py, database.py, logging_config.py
     middleware/          # RequestLoggingMiddleware
-    models/, services/, api/, schemas/
+    models/              # account, config, debt, escrow, family, invitation,
+                         # redemption_request, refresh_token, settlement,
+                         # sms_code, transaction, user, violation, wishlist
+    services/            # auth, config, escrow, family, income, interest,
+                         # overflow, purchase, redemption, settlement, sms,
+                         # spending, tenant, transaction, violation, wishlist
+    api/                 # accounts, auth, config, deps, family, income,
+                         # redemption, settlement, transactions, violations, wishlist
+    schemas/             # auth, common, config, family, income, purchase,
+                         # redemption, settlement, spending, transaction,
+                         # violation, wishlist
+    migrations/          # init.sql, seed.sql
   tests/
     unit/, integration/, conftest.py
   pyproject.toml, uv.lock
 
 frontend/
   src/
-    pages/, components/, services/, router/
+    pages/               # 11 个 Vue 页面
+    components/          # AccountCard, ChildSelector, FamilyMemberList,
+                         # HelloWorld, InvitationManager, SettlementReport,
+                         # TransactionList
+    services/, router/
   package.json, vite.config.ts
+
+specs/
+  001-fambank-core/                # 核心功能设计文档
+  002-multi-tenant-platform/       # 多租户平台设计文档
 
 deploy/
   fambank.service, setup.sh
