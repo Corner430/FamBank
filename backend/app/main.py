@@ -21,6 +21,7 @@ from app.api import violations as violations_api
 from app.api import wishlist as wishlist_api
 from app.logging_config import setup_logging
 from app.middleware.logging_middleware import RequestLoggingMiddleware
+from app.middleware.security_middleware import SecurityHeadersMiddleware
 from app.schemas.common import HealthResponse
 
 logger = structlog.get_logger("fambank")
@@ -58,6 +59,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Security headers middleware
+app.add_middleware(SecurityHeadersMiddleware)
+
 # Request logging middleware
 app.add_middleware(RequestLoggingMiddleware)
 
@@ -89,7 +93,8 @@ if frontend_dist.is_dir():
     @app.get("/{full_path:path}")
     async def spa_fallback(full_path: str):
         # Try to serve the exact file first (e.g. favicon.ico)
-        file_path = frontend_dist / full_path
-        if full_path and file_path.is_file():
+        file_path = (frontend_dist / full_path).resolve()
+        # Ensure resolved path is under frontend_dist to prevent path traversal
+        if full_path and file_path.is_file() and str(file_path).startswith(str(frontend_dist)):
             return FileResponse(file_path)
         return FileResponse(frontend_dist / "index.html")

@@ -10,7 +10,18 @@ from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "fambank-dev-only-change-in-production")
+_secret = os.getenv("JWT_SECRET_KEY", "")
+if not _secret:
+    import warnings
+
+    _secret = "fambank-dev-only-change-in-production"
+    warnings.warn(
+        "JWT_SECRET_KEY is not set! Using insecure default. "
+        "Set JWT_SECRET_KEY env var before deploying to production.",
+        stacklevel=1,
+    )
+
+SECRET_KEY: str = _secret
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 REFRESH_TOKEN_EXPIRE_DAYS = 30

@@ -192,7 +192,8 @@ async def _execute_child_settlement(
 
     # 1. Acquire per-child advisory lock
     lock_result = await session.execute(
-        text(f"SELECT GET_LOCK('{lock_name}', {LOCK_TIMEOUT})")
+        text("SELECT GET_LOCK(:lock_name, :timeout)"),
+        {"lock_name": lock_name, "timeout": LOCK_TIMEOUT},
     )
     lock_acquired = lock_result.scalar()
     if lock_acquired != 1:
@@ -415,7 +416,8 @@ async def _execute_child_settlement(
     finally:
         # Release per-child advisory lock
         await session.execute(
-            text(f"SELECT RELEASE_LOCK('{lock_name}')")
+            text("SELECT RELEASE_LOCK(:lock_name)"),
+            {"lock_name": lock_name},
         )
         logger.info("settlement_lock_released", user_id=user_id)
 

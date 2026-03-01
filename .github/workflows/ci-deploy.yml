@@ -104,3 +104,57 @@ jobs:
             curl -sf http://localhost:8000/api/v1/health || { echo "Health check failed!"; exit 1; }
 
             echo "==> Deploy complete."
+
+  release:
+    needs: [test, deploy]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate version tag
+        id: version
+        run: |
+          DATE_TAG="v$(date -u +'%Y.%m.%d')"
+          # Check for existing tags with the same date prefix and increment
+          EXISTING=$(git tag -l "${DATE_TAG}.*" | sort -V | tail -1)
+          if [ -z "$EXISTING" ]; then
+            VERSION="${DATE_TAG}.1"
+          else
+            # Extract the build number and increment
+            BUILD_NUM=$(echo "$EXISTING" | grep -oP '\d+$')
+            VERSION="${DATE_TAG}.$((BUILD_NUM + 1))"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Generated version: $VERSION"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          # Get the previous tag
+          PREV_TAG=$(git tag -l 'v*' --sort=-version:refname | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREV_TAG}..HEAD"
+          fi
+          # Generate commit log
+          NOTES=$(git log "$RANGE" --pretty=format:"- %s (%h)" --no-merges | head -50)
+          if [ -z "$NOTES" ]; then
+            NOTES="- Maintenance release"
+          fi
+          # Write to file to handle multiline
+          echo "$NOTES" > /tmp/release_notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.version.outputs.version }}" \
+            --title "Release ${{ steps.version.outputs.version }}" \
+            --notes-file /tmp/release_notes.md

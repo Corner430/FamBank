@@ -17,7 +17,7 @@ Auto-generated from all feature plans. Last updated: 2026-02-28
 backend/
   app/
     main.py, auth.py, database.py, logging_config.py
-    middleware/          # RequestLoggingMiddleware
+    middleware/          # RequestLoggingMiddleware, SecurityHeadersMiddleware
     models/              # account, config, debt, escrow, family, invitation,
                          # redemption_request, refresh_token, settlement,
                          # sms_code, transaction, user, violation, wishlist
@@ -80,12 +80,13 @@ journalctl -u fambank -f            # 查看日志
 - Every service function MUST create Transaction records with charter_clause reference
 - 日志: 所有 service 文件顶部 `logger = structlog.get_logger("模块名")`，业务操作必须有 INFO 日志，JSON 格式输出
 - 环境变量 LOG_LEVEL 控制日志级别（默认 INFO）
-- CI/CD: 推送 main 分支自动触发 test + deploy
+- CI/CD: 推送 main 分支自动触发 test + deploy + release（自动创建 GitHub Release，日期版本号）
+- 安全: OTP/邀请码必须使用 `secrets` 模块生成，禁止 `random`；日志禁止记录验证码、邀请码等敏感值；SPA fallback 必须校验路径不逃逸出 frontend_dist
 
 ## Recent Changes
+- 安全加固: JWT 启动校验、OTP 使用 secrets CSPRNG、安全响应头中间件、SPA 路径穿越防护、SQL 参数化、分页上限约束、日志脱敏
+- CI/CD 自动 Release: test + deploy 成功后自动创建 GitHub Release（日期版本号 vYYYY.MM.DD.N）
 - 002-multi-tenant-platform: Added Python 3.12 (backend, managed by uv), TypeScript (frontend) + FastAPI, Pydantic, uvicorn, aiomysql/SQLAlchemy, PyJWT, Vue 3, Vue Router, Vite
-- 001-fambank-core: Python 3.12 + FastAPI + MySQL 8.0 + Vue 3 + uv
-- structlog 结构化 JSON 日志，覆盖全部 service 和 HTTP 请求
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
