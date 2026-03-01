@@ -39,6 +39,10 @@ jobs:
         working-directory: backend
         run: uv sync --extra dev
 
+      - name: Allow MySQL triggers for non-SUPER user
+        run: |
+          mysql -h 127.0.0.1 -u root -proot -e "SET GLOBAL log_bin_trust_function_creators = 1;"
+
       - name: Lint (ruff)
         working-directory: backend
         run: uv run ruff check .
