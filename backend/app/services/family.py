@@ -4,7 +4,7 @@ Handles family creation with auto-config initialization, invitation code
 generation, and the join-family flow with automatic account creation for children.
 """
 
-import random
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import structlog
@@ -116,8 +116,8 @@ async def get_family_detail(family_id: int, db: AsyncSession) -> dict:
 
 
 def _generate_code() -> str:
-    """Generate an 8-char alphanumeric invitation code."""
-    return "".join(random.choices(CODE_CHARS, k=CODE_LENGTH))
+    """Generate a cryptographically secure 8-char alphanumeric invitation code."""
+    return "".join(secrets.choice(CODE_CHARS) for _ in range(CODE_LENGTH))
 
 
 async def create_invitation(
@@ -148,7 +148,6 @@ async def create_invitation(
     logger.info(
         "invitation_created",
         family_id=family_id,
-        code=code,
         target_role=target_role,
         target_name=target_name,
     )

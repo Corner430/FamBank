@@ -121,7 +121,8 @@ async def process_income(
 
     # Check that settlement is not in progress
     lock_check = await session.execute(
-        text(f"SELECT IS_FREE_LOCK('{SETTLEMENT_LOCK_NAME}')")
+        text("SELECT IS_FREE_LOCK(:lock_name)"),
+        {"lock_name": SETTLEMENT_LOCK_NAME},
     )
     is_free = lock_check.scalar()
     if is_free == 0:

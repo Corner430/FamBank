@@ -1,7 +1,7 @@
 """SMS provider abstraction: dev mock + Tencent Cloud SMS."""
 
 import os
-import random
+import secrets
 import string
 from abc import ABC, abstractmethod
 
@@ -23,7 +23,7 @@ class DevSmsProvider(SmsProvider):
     """Dev SMS provider: always succeeds, logs code to console."""
 
     async def send_code(self, phone: str, code: str) -> bool:
-        logger.info("dev_sms_sent", phone=phone, code=code)
+        logger.info("dev_sms_sent", phone=phone[-4:], code_length=len(code))
         return True
 
 
@@ -49,13 +49,13 @@ class TencentSmsProvider(SmsProvider):
 
 
 def generate_code() -> str:
-    """Generate a 6-digit verification code."""
-    return "".join(random.choices(string.digits, k=6))
+    """Generate a cryptographically secure 6-digit verification code."""
+    return "".join(secrets.choice(string.digits) for _ in range(6))
 
 
 def get_dev_code() -> str:
-    """Return fixed dev code."""
-    return "123456"
+    """Return a random code even in dev mode (for security)."""
+    return generate_code()
 
 
 def get_sms_provider() -> SmsProvider:

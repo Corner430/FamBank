@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -81,8 +81,8 @@ async def create_settlement(
 @router.get("/settlements")
 async def list_settlements(
     ctx: ParentContext,
-    page: int = 1,
-    per_page: int = 12,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(12, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     """List settlement history for the family. Parent-only."""

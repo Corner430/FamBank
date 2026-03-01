@@ -34,9 +34,9 @@ FamBank 实现了一套完整的三账户资产管理体系：
 | 敏感项 | 保护方式 |
 |--------|----------|
 | 数据库密码 | 通过 `.env` 文件配置，**已被 `.gitignore` 排除**，不会提交到仓库 |
-| JWT 签名密钥 | 通过环境变量 `JWT_SECRET_KEY` 配置，生产环境必须替换默认值 |
+| JWT 签名密钥 | 通过环境变量 `JWT_SECRET_KEY` 配置，**未设置时应用启动会发出警告**，生产环境必须设置 |
 | 服务器 SSH 密钥 | 存储在 GitHub Secrets（`SSH_HOST`/`SSH_USER`/`SSH_PRIVATE_KEY`），不在代码中 |
-| 短信验证码 | 数据库存储，有效期 5 分钟，过期自动失效；防暴力：60 秒发送冷却 + 5 次尝试上限 |
+| 短信验证码 | 数据库存储，有效期 5 分钟，过期自动失效；防暴力：60 秒发送冷却 + 5 次尝试上限；使用密码学安全随机数生成 |
 
 ### .gitignore 保护
 
@@ -274,7 +274,7 @@ FamBank/
 │   │   ├── schemas/       # Pydantic 请求/响应模型
 │   │   ├── services/      # 业务逻辑层（16 个服务文件）
 │   │   ├── migrations/    # SQL 建表、种子数据
-│   │   ├── middleware/    # 请求日志中间件
+│   │   ├── middleware/    # 请求日志 + 安全响应头中间件
 │   │   ├── auth.py        # JWT 认证工具
 │   │   ├── database.py    # 异步数据库连接
 │   │   ├── logging_config.py # structlog 结构化日志配置
@@ -324,7 +324,8 @@ cd backend && uv run pytest tests/ -v
 | `DB_PASSWORD` | MySQL 密码 | `fambank` |
 | `DB_NAME` | 数据库名 | `fambank` |
 | `DATABASE_URL` | 完整连接串（设置后覆盖上面的拆分字段） | - |
-| `JWT_SECRET_KEY` | JWT 签名密钥（**生产环境必须修改**） | `fambank-dev-only-...` |
+| `JWT_SECRET_KEY` | JWT 签名密钥（**生产环境必须修改**） | 启动警告 |
+| `SMS_MODE` | 短信模式：`dev`（随机码+日志）/ `tencent`（腾讯云短信） | `dev` |
 | `TEST_DATABASE_URL` | 测试库连接串（仅开发时需要） | - |
 | `LOG_LEVEL` | 日志级别（DEBUG/INFO/WARNING/ERROR） | `INFO` |
 
@@ -515,10 +516,20 @@ SSH 到服务器 → git pull origin main
 → 等待 3 秒 → curl 健康检查（失败则报错）
 ```
 
+**release job**（仅 push main 且 test + deploy 都通过）：
+
+```
+checkout（fetch-depth: 0）
+→ 生成日期版本号（vYYYY.MM.DD.N，同一天多次部署自动递增）
+→ 从上一个 tag 到 HEAD 生成 commit 变更日志
+→ gh release create 创建 GitHub Release
+```
+
 **验证方式**：推一次代码到 main，到仓库 **Actions** 页签查看：
 
 - test job 绿色 → lint + 测试 + 构建全部通过
 - deploy job 绿色 → 服务器已自动更新并重启
+- release job 绿色 → GitHub Release 已创建，可在 Releases 页查看
 
 PR 只跑 test 不触发部署。
 
@@ -530,3 +541,4 @@ PR 只跑 test 不触发部署。
 - **租户隔离**：多租户架构下，每个家庭的数据通过 family_id 严格隔离，JWT 令牌携带租户上下文
 - **角色隔离**：家长和孩子有不同的操作权限
 - **隐私保护**：所有密码/密钥通过环境变量配置，敏感文件不入库
+- **安全加固**：安全响应头（X-Frame-Options、X-Content-Type-Options 等）、SPA 路径穿越防护、OTP/邀请码使用密码学安全随机数（`secrets`模块）、日志脱敏（不记录验证码和邀请码）、SQL 全参数化查询
