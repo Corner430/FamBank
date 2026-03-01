@@ -1,4 +1,4 @@
-"""Auth API endpoints: POST /auth/login, POST /auth/setup."""
+"""Auth API endpoints: login, setup, PIN change/reset."""
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -6,9 +6,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import ParentUser
 from app.auth import create_token, hash_pin, verify_pin
 from app.database import get_db
 from app.models.user import User
+from app.schemas.auth import ChangePinRequest, PinChangeResponse, ResetChildPinRequest
 
 logger = structlog.get_logger("auth")
 
@@ -101,3 +103,67 @@ async def auth_status(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User))
     has_users = result.scalars().first() is not None
     return {"initialized": has_users}
+
+
+@router.put("/pin", response_model=PinChangeResponse)
+async def change_pin(
+    req: ChangePinRequest,
+    user: ParentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Change the parent's own PIN. Requires old PIN verification."""
+    result = await db.execute(select(User).where(User.id == user["user_id"]))
+    db_user = result.scalars().first()
+
+    if not verify_pin(req.old_pin, db_user.pin_hash):
+        logger.warning("change_pin_failed", user_id=user["user_id"], reason="wrong_old_pin")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="原密码错误",
+        )
+
+    if req.old_pin == req.new_pin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="新密码不能与原密码相同",
+        )
+
+    db_user.pin_hash = hash_pin(req.new_pin)
+    await db.commit()
+
+    logger.info("pin_changed", user_id=user["user_id"])
+    return PinChangeResponse(message="密码修改成功")
+
+
+@router.put("/child-pin", response_model=PinChangeResponse)
+async def reset_child_pin(
+    req: ResetChildPinRequest,
+    user: ParentUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reset the child's PIN. Requires parent PIN for secondary auth."""
+    # Verify parent PIN (secondary authentication)
+    result = await db.execute(select(User).where(User.id == user["user_id"]))
+    parent = result.scalars().first()
+
+    if not verify_pin(req.parent_pin, parent.pin_hash):
+        logger.warning("reset_child_pin_failed", user_id=user["user_id"], reason="wrong_parent_pin")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="管理密码错误",
+        )
+
+    # Find and update child user
+    result = await db.execute(select(User).where(User.role == "child"))
+    child = result.scalars().first()
+    if not child:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="未找到乙方用户",
+        )
+
+    child.pin_hash = hash_pin(req.new_child_pin)
+    await db.commit()
+
+    logger.info("child_pin_reset", parent_id=user["user_id"], child_id=child.id)
+    return PinChangeResponse(message="乙方PIN码重置成功")

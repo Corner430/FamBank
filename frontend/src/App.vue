@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getStoredUser, clearToken, clearStoredUser } from './services/api'
+import { currentUser, clearToken, clearStoredUser } from './services/api'
 
 const router = useRouter()
-const user = computed(() => getStoredUser())
+const user = currentUser
 
 function logout() {
   clearToken()
@@ -27,6 +26,7 @@ function logout() {
         <router-link v-if="user?.role === 'parent'" to="/settlement">结算</router-link>
         <router-link v-if="user?.role === 'parent'" to="/violations">违约</router-link>
         <router-link v-if="user?.role === 'parent'" to="/config">配置</router-link>
+        <router-link v-if="user?.role === 'parent'" to="/settings">设置</router-link>
       </div>
       <div class="nav-user">
         <span>{{ user?.name }} ({{ user?.role === 'parent' ? '甲方' : '乙方' }})</span>
