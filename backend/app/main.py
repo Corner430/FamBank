@@ -1,11 +1,12 @@
 """FastAPI app entry point with CORS, router mount, static file serving."""
 
-import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import accounts as accounts_api
@@ -42,7 +43,7 @@ app = FastAPI(
 # CORS for frontend dev server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:8000"],
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://localhost:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -68,7 +69,17 @@ async def health_check():
     return HealthResponse(status="ok", version="0.1.0")
 
 
-# Mount static files for production (frontend build output)
-frontend_dist = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
-if os.path.isdir(frontend_dist):
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="static")
+# Mount static files for production (frontend build output) with SPA fallback
+frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if frontend_dist.is_dir():
+    # Serve static assets (js, css, images, etc.)
+    app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
+
+    # SPA fallback: any non-API route returns index.html for client-side routing
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        # Try to serve the exact file first (e.g. favicon.ico)
+        file_path = frontend_dist / full_path
+        if full_path and file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(frontend_dist / "index.html")

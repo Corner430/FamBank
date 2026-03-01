@@ -2,7 +2,11 @@
  * API client service: fetch wrapper with session token and Decimal string handling.
  */
 
+import { ref } from 'vue'
+
 const API_BASE = '/api/v1'
+
+export type StoredUser = { id: number; role: string; name: string }
 
 function getToken(): string | null {
   return localStorage.getItem('fambank_token')
@@ -16,17 +20,26 @@ export function clearToken(): void {
   localStorage.removeItem('fambank_token')
 }
 
-export function getStoredUser(): { id: number; role: string; name: string } | null {
+function loadStoredUser(): StoredUser | null {
   const raw = localStorage.getItem('fambank_user')
   return raw ? JSON.parse(raw) : null
 }
 
-export function setStoredUser(user: { id: number; role: string; name: string }): void {
+/** Reactive user state — use this in components instead of reading localStorage directly. */
+export const currentUser = ref<StoredUser | null>(loadStoredUser())
+
+export function getStoredUser(): StoredUser | null {
+  return currentUser.value
+}
+
+export function setStoredUser(user: StoredUser): void {
   localStorage.setItem('fambank_user', JSON.stringify(user))
+  currentUser.value = user
 }
 
 export function clearStoredUser(): void {
   localStorage.removeItem('fambank_user')
+  currentUser.value = null
 }
 
 async function request<T>(
@@ -68,6 +81,8 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'POST', body: data ? JSON.stringify(data) : undefined }),
+  put: <T>(path: string, data?: unknown) =>
+    request<T>(path, { method: 'PUT', body: data ? JSON.stringify(data) : undefined }),
   patch: <T>(path: string, data?: unknown) =>
     request<T>(path, { method: 'PATCH', body: data ? JSON.stringify(data) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
