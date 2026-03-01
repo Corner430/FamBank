@@ -78,6 +78,7 @@ async def _clean_tables(session: AsyncSession):
     """Truncate all tables and recreate triggers for a clean test."""
     await session.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
     tables = [
+        "redemption_request",
         "escrow", "debt", "announcement", "config",
         "violation", "wish_item", "wish_list",
         "transaction_log", "settlement", "account", "user",

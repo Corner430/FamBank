@@ -14,6 +14,17 @@ interface AccountInfo {
   is_deposit_suspended?: boolean
 }
 
+interface PendingRedemption {
+  id: number
+  amount: string
+  fee: string
+  net: string
+  c_balance: string
+  reason: string
+  status: string
+  created_at: string
+}
+
 const accounts = ref<AccountInfo[]>([])
 const totalDebt = ref('0.00')
 const loading = ref(true)
@@ -24,14 +35,6 @@ const redeemAmount = ref('')
 const redeemReason = ref('')
 const redeemLoading = ref(false)
 const redeemError = ref('')
-const redeemPending = ref<{
-  amount: string
-  fee: string
-  net: string
-  c_balance: string
-  reason: string
-  status: string
-} | null>(null)
 const redeemResult = ref<{
   status: string
   amount: string
@@ -41,8 +44,11 @@ const redeemResult = ref<{
   a_balance_after?: string
 } | null>(null)
 
+// Pending requests from DB
+const pendingRequests = ref<PendingRedemption[]>([])
+const pendingLoading = ref(false)
+
 // Approval state (parent)
-const approveAmount = ref('')
 const approveLoading = ref(false)
 const approveError = ref('')
 
@@ -77,24 +83,31 @@ async function loadAccounts() {
   }
 }
 
+async function loadPendingRedemptions() {
+  pendingLoading.value = true
+  try {
+    const res = await api.get<{ requests: PendingRedemption[] }>('/accounts/c/redemption/pending')
+    pendingRequests.value = res.requests
+  } catch {
+    // silently ignore – pending list is supplementary
+    pendingRequests.value = []
+  } finally {
+    pendingLoading.value = false
+  }
+}
+
 async function requestRedemption() {
   redeemLoading.value = true
   redeemError.value = ''
-  redeemPending.value = null
   redeemResult.value = null
   try {
-    const res = await api.post<{
-      amount: string
-      fee: string
-      net: string
-      c_balance: string
-      reason: string
-      status: string
-    }>('/accounts/c/redemption/request', {
+    await api.post<PendingRedemption>('/accounts/c/redemption/request', {
       amount: redeemAmount.value,
       reason: redeemReason.value,
     })
-    redeemPending.value = res
+    redeemAmount.value = ''
+    redeemReason.value = ''
+    await loadPendingRedemptions()
   } catch (e: unknown) {
     redeemError.value = e instanceof Error ? e.message : '请求失败'
   } finally {
@@ -102,14 +115,13 @@ async function requestRedemption() {
   }
 }
 
-async function handleApproval(approved: boolean) {
-  if (!redeemPending.value && !approveAmount.value) return
+async function handleApproval(id: number, approved: boolean) {
   approveLoading.value = true
   approveError.value = ''
   redeemResult.value = null
-  const amount = redeemPending.value?.amount || approveAmount.value
   try {
     const res = await api.post<{
+      id: number
       status: string
       amount: string
       fee?: string
@@ -117,14 +129,11 @@ async function handleApproval(approved: boolean) {
       c_balance_after?: string
       a_balance_after?: string
     }>('/accounts/c/redemption/approve', {
-      amount,
+      id,
       approved,
-      reason: redeemReason.value,
     })
     redeemResult.value = res
-    redeemPending.value = null
-    approveAmount.value = ''
-    await loadAccounts()
+    await Promise.all([loadAccounts(), loadPendingRedemptions()])
   } catch (e: unknown) {
     approveError.value = e instanceof Error ? e.message : '审批失败'
   } finally {
@@ -156,7 +165,16 @@ async function spendFromA() {
   }
 }
 
-onMounted(loadAccounts)
+function formatTime(iso: string): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toLocaleString('zh-CN')
+}
+
+onMounted(() => {
+  loadAccounts()
+  loadPendingRedemptions()
+})
 </script>
 
 <template>
@@ -263,74 +281,53 @@ onMounted(loadAccounts)
         <p v-if="redeemError" class="error">{{ redeemError }}</p>
       </div>
 
-      <!-- Pending Status -->
-      <div v-if="redeemPending" class="pending-card">
-        <h3>待审批</h3>
-        <div class="detail-row">
-          <span>赎回金额：</span><span>&yen;{{ redeemPending.amount }}</span>
-        </div>
-        <div class="detail-row">
-          <span>手续费 (10%)：</span><span>&yen;{{ redeemPending.fee }}</span>
-        </div>
-        <div class="detail-row">
-          <span>实际到账：</span><span class="highlight">&yen;{{ redeemPending.net }}</span>
-        </div>
-        <div class="detail-row">
-          <span>C当前余额：</span><span>&yen;{{ redeemPending.c_balance }}</span>
-        </div>
-        <div v-if="redeemPending.reason" class="detail-row">
-          <span>原因：</span><span>{{ redeemPending.reason }}</span>
-        </div>
+      <!-- Pending Requests List -->
+      <div v-if="pendingRequests.length > 0" class="pending-list">
+        <h3>待审批赎回请求</h3>
+        <div
+          v-for="req in pendingRequests"
+          :key="req.id"
+          class="pending-card"
+        >
+          <div class="detail-row">
+            <span>赎回金额：</span><span>&yen;{{ req.amount }}</span>
+          </div>
+          <div class="detail-row">
+            <span>手续费 (10%)：</span><span>&yen;{{ req.fee }}</span>
+          </div>
+          <div class="detail-row">
+            <span>实际到账：</span><span class="highlight">&yen;{{ req.net }}</span>
+          </div>
+          <div class="detail-row">
+            <span>C当前余额：</span><span>&yen;{{ req.c_balance }}</span>
+          </div>
+          <div v-if="req.reason" class="detail-row">
+            <span>原因：</span><span>{{ req.reason }}</span>
+          </div>
+          <div class="detail-row">
+            <span>申请时间：</span><span>{{ formatTime(req.created_at) }}</span>
+          </div>
 
-        <!-- Parent Approve/Reject Panel -->
-        <div v-if="isParent" class="approval-panel">
-          <button
-            class="btn btn-approve"
-            @click="handleApproval(true)"
-            :disabled="approveLoading"
-          >
-            批准
-          </button>
-          <button
-            class="btn btn-reject"
-            @click="handleApproval(false)"
-            :disabled="approveLoading"
-          >
-            拒绝
-          </button>
-          <p v-if="approveError" class="error">{{ approveError }}</p>
+          <!-- Parent Approve/Reject -->
+          <div v-if="isParent" class="approval-panel">
+            <button
+              class="btn btn-approve"
+              @click="handleApproval(req.id, true)"
+              :disabled="approveLoading"
+            >
+              批准
+            </button>
+            <button
+              class="btn btn-reject"
+              @click="handleApproval(req.id, false)"
+              :disabled="approveLoading"
+            >
+              拒绝
+            </button>
+          </div>
+          <p v-else class="info-text">等待甲方审批...</p>
         </div>
-        <p v-else class="info-text">等待甲方审批...</p>
-      </div>
-
-      <!-- Parent Direct Approve Panel (when no pending from child) -->
-      <div v-if="isParent && !redeemPending" class="approve-direct">
-        <h3>直接审批赎回</h3>
-        <div class="form-row">
-          <label>金额 (元)</label>
-          <input
-            v-model="approveAmount"
-            type="text"
-            placeholder="输入待审批的赎回金额"
-          />
-        </div>
-        <div class="approval-panel">
-          <button
-            class="btn btn-approve"
-            @click="handleApproval(true)"
-            :disabled="approveLoading || !approveAmount"
-          >
-            批准
-          </button>
-          <button
-            class="btn btn-reject"
-            @click="handleApproval(false)"
-            :disabled="approveLoading || !approveAmount"
-          >
-            拒绝
-          </button>
-          <p v-if="approveError" class="error">{{ approveError }}</p>
-        </div>
+        <p v-if="approveError" class="error">{{ approveError }}</p>
       </div>
 
       <!-- Result -->
@@ -455,8 +452,17 @@ onMounted(loadAccounts)
   color: white;
 }
 
-.pending-card {
+.pending-list {
   margin-top: 16px;
+}
+
+.pending-list h3 {
+  margin-bottom: 12px;
+  color: #e65100;
+}
+
+.pending-card {
+  margin-bottom: 12px;
   padding: 16px;
   border: 2px solid #ff9800;
   border-radius: 8px;
@@ -491,19 +497,6 @@ onMounted(loadAccounts)
   margin-top: 12px;
   color: #888;
   font-style: italic;
-}
-
-.approve-direct {
-  margin-top: 16px;
-  padding: 16px;
-  border: 1px dashed #ccc;
-  border-radius: 8px;
-}
-
-.approve-direct h3 {
-  margin-bottom: 12px;
-  color: #555;
-  font-size: 1em;
 }
 
 .result-card {

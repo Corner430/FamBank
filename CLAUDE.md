@@ -66,6 +66,8 @@ journalctl -u fambank -f            # 查看日志
 - 001-fambank-core: Python 3.12 + FastAPI + MySQL 8.0 + Vue 3 + uv
 - structlog 结构化 JSON 日志，覆盖全部 service 和 HTTP 请求
 - systemd 服务（自动重启）+ GitHub Actions CI/CD（test + deploy → main）
+- C 赎回审批持久化：新增 redemption_request 表，request/approve/reject 全部写库，前端从 API 加载 pending 列表
+- JWT_SECRET_KEY 改为环境变量配置（auth.py），生产环境必须在 .env 中设置
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
