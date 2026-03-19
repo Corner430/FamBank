@@ -1,0 +1,63 @@
+<view class="settlement-report" wx:if="{{report}}">
+  <!-- Header -->
+  <view class="report-header">
+    <text class="child-name">{{report.child_name}}</text>
+    <text class="settlement-date">{{report.settlement_date}}</text>
+  </view>
+
+  <!-- Settlement items -->
+  <view class="report-items">
+    <view class="report-row">
+      <text class="row-label">C派息</text>
+      <text class="row-value">¥{{formatted.cDividend}}</text>
+    </view>
+    <view class="report-row">
+      <text class="row-label">B溢出</text>
+      <text class="row-value">¥{{formatted.bOverflow}}</text>
+    </view>
+    <view class="report-row">
+      <text class="row-label">B利息</text>
+      <text class="row-value">¥{{formatted.bInterest}}</text>
+    </view>
+    <view class="report-row">
+      <text class="row-label">违约转移</text>
+      <text class="row-value">¥{{formatted.violationTransfer}}</text>
+    </view>
+    <view class="report-row highlight">
+      <text class="row-label">P_active</text>
+      <text class="row-value">{{formatted.pActive}}</text>
+    </view>
+  </view>
+
+  <!-- Snapshot comparison -->
+  <view class="snapshot-section" wx:if="{{snapshotBefore && snapshotAfter}}">
+    <text class="snapshot-title">资产快照对比</text>
+    <view class="snapshot-table">
+      <view class="snapshot-header-row">
+        <text class="snapshot-cell label">账户</text>
+        <text class="snapshot-cell">结算前</text>
+        <text class="snapshot-cell">结算后</text>
+      </view>
+      <view class="snapshot-row">
+        <text class="snapshot-cell label">{{accountNames.A}}</text>
+        <text class="snapshot-cell">¥{{snapshotBefore.a}}</text>
+        <text class="snapshot-cell">¥{{snapshotAfter.a}}</text>
+      </view>
+      <view class="snapshot-row">
+        <text class="snapshot-cell label">{{accountNames.B}}</text>
+        <text class="snapshot-cell">¥{{snapshotBefore.b}}</text>
+        <text class="snapshot-cell">¥{{snapshotAfter.b}}</text>
+      </view>
+      <view class="snapshot-row">
+        <text class="snapshot-cell label">{{accountNames.C}}</text>
+        <text class="snapshot-cell">¥{{snapshotBefore.c}}</text>
+        <text class="snapshot-cell">¥{{snapshotAfter.c}}</text>
+      </view>
+      <view class="snapshot-row">
+        <text class="snapshot-cell label">B利息池</text>
+        <text class="snapshot-cell">¥{{snapshotBefore.bInterestPool}}</text>
+        <text class="snapshot-cell">¥{{snapshotAfter.bInterestPool}}</text>
+      </view>
+    </view>
+  </view>
+</view>

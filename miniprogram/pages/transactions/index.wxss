@@ -1,0 +1,31 @@
+/* Filter Tabs */
+.filter-tabs {
+  display: flex;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 8rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+}
+
+.filter-tab {
+  flex: 1;
+  text-align: center;
+  padding: 16rpx 0;
+  font-size: 28rpx;
+  color: #666;
+  border-radius: 12rpx;
+  transition: all 0.2s;
+}
+
+.filter-tab-active {
+  background: #4A90D9;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* No More */
+.no-more {
+  text-align: center;
+  padding: 30rpx 0;
+}

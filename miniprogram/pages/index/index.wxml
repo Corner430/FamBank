@@ -1,0 +1,103 @@
+<view class="container">
+  <!-- Loading -->
+  <view wx:if="{{loading}}" class="flex-center" style="padding-top: 200rpx;">
+    <text class="text-muted">加载中...</text>
+  </view>
+
+  <!-- Parent View -->
+  <block wx:elif="{{role === 'parent'}}">
+    <view class="dashboard-header">
+      <text class="family-name">{{familyName}}</text>
+      <view class="total-assets-box">
+        <text class="text-muted text-small">家庭总资产</text>
+        <text class="total-assets-amount">¥{{totalAssets}}</text>
+      </view>
+    </view>
+
+    <view class="section-header mt-20">
+      <text class="text-bold">孩子账户</text>
+    </view>
+
+    <block wx:if="{{children.length > 0}}">
+      <view
+        wx:for="{{children}}"
+        wx:key="user_id"
+        class="card child-card"
+        data-child-id="{{item.user_id}}"
+        data-child-name="{{item.name}}"
+        bindtap="onTapChild"
+      >
+        <view class="flex-between">
+          <text class="child-name">{{item.name}}</text>
+          <text class="text-primary text-bold">¥{{item.displayTotal}}</text>
+        </view>
+        <view class="child-accounts mt-10">
+          <view class="child-account-item">
+            <view class="account-dot account-a"></view>
+            <text class="text-small text-muted">零钱宝</text>
+            <text class="text-small">¥{{item.displayA}}</text>
+          </view>
+          <view class="child-account-item">
+            <view class="account-dot account-b"></view>
+            <text class="text-small text-muted">梦想金</text>
+            <text class="text-small">¥{{item.displayB}}</text>
+          </view>
+          <view class="child-account-item">
+            <view class="account-dot account-c"></view>
+            <text class="text-small text-muted">牛马金</text>
+            <text class="text-small">¥{{item.displayC}}</text>
+          </view>
+        </view>
+      </view>
+    </block>
+
+    <view wx:else class="empty-state">
+      <text>还没有孩子加入家庭，请在"我的"页面创建邀请码</text>
+    </view>
+
+    <!-- Floating action button -->
+    <view class="fab" bindtap="onTapIncome">
+      <text class="fab-text">+ 记录收入</text>
+    </view>
+  </block>
+
+  <!-- Child View -->
+  <block wx:elif="{{role === 'child'}}">
+    <view class="child-dashboard">
+      <account-card
+        wx:for="{{accounts}}"
+        wx:key="type"
+        account="{{item}}"
+      />
+
+      <view wx:if="{{totalDebtValue > 0}}" class="card debt-warning">
+        <view class="flex-between">
+          <text class="text-danger text-bold">未还欠款</text>
+          <text class="text-danger amount">¥{{totalDebt}}</text>
+        </view>
+        <text class="text-muted text-small mt-10">请尽快偿还欠款，否则可能影响利息收益</text>
+      </view>
+
+      <view wx:if="{{recentTransactions.length > 0}}" class="mt-20">
+        <view class="section-header">
+          <text class="text-bold">最近交易</text>
+        </view>
+        <view class="card">
+          <view
+            wx:for="{{recentTransactions}}"
+            wx:key="id"
+            class="list-item"
+          >
+            <view class="flex-column" style="flex: 1;">
+              <text class="text-small">{{item.typeLabel}}</text>
+              <text class="text-muted text-small">{{item.displayDate}}</text>
+            </view>
+            <text class="{{item.amount >= 0 ? 'text-success' : 'text-danger'}} text-bold">
+              {{item.amount >= 0 ? '+' : ''}}¥{{item.displayAmount}}
+            </text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

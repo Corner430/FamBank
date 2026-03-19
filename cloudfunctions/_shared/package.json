@@ -1,0 +1,6 @@
+{
+  "name": "@fambank/shared",
+  "version": "1.0.0",
+  "description": "FamBank shared utilities for cloud functions",
+  "main": "index.js"
+}

@@ -1,0 +1,11 @@
+<scroll-view class="child-selector" scroll-x enable-flex>
+  <view
+    class="child-chip {{item.id === selectedId ? 'selected' : ''}}"
+    wx:for="{{children}}"
+    wx:key="id"
+    data-id="{{item.id}}"
+    bindtap="onSelectChild"
+  >
+    <text class="child-chip-text">{{item.name}}</text>
+  </view>
+</scroll-view>

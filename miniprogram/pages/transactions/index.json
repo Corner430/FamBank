@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "账单",
+  "enablePullDownRefresh": true,
+  "usingComponents": {
+    "child-selector": "/components/child-selector/index",
+    "transaction-list": "/components/transaction-list/index"
+  }
+}

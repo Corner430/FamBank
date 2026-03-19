@@ -1,0 +1,99 @@
+/* Dashboard page styles */
+.dashboard-header {
+  background: linear-gradient(135deg, #4A90D9, #357abd);
+  padding: 60rpx 40rpx 50rpx;
+  margin: -20rpx -20rpx 0;
+  border-radius: 0 0 30rpx 30rpx;
+  color: #fff;
+}
+
+.family-name {
+  display: block;
+  font-size: 36rpx;
+  font-weight: bold;
+  margin-bottom: 20rpx;
+}
+
+.total-assets-box {
+  display: flex;
+  flex-direction: column;
+}
+
+.total-assets-box .text-muted {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.total-assets-amount {
+  font-size: 64rpx;
+  font-weight: bold;
+  margin-top: 10rpx;
+}
+
+.child-card {
+  margin-top: 20rpx;
+  padding: 30rpx;
+}
+
+.child-name {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.child-accounts {
+  display: flex;
+  justify-content: space-between;
+}
+
+.child-account-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.account-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+}
+
+.account-dot.account-a {
+  background-color: #4A90D9;
+}
+
+.account-dot.account-b {
+  background-color: #27ae60;
+}
+
+.account-dot.account-c {
+  background-color: #9b59b6;
+}
+
+/* Floating action button */
+.fab {
+  position: fixed;
+  right: 40rpx;
+  bottom: 120rpx;
+  background: #4A90D9;
+  color: #fff;
+  padding: 24rpx 40rpx;
+  border-radius: 50rpx;
+  box-shadow: 0 8rpx 24rpx rgba(74, 144, 217, 0.4);
+  z-index: 100;
+}
+
+.fab-text {
+  font-size: 30rpx;
+  font-weight: bold;
+}
+
+/* Child dashboard */
+.child-dashboard {
+  padding-top: 10rpx;
+}
+
+.debt-warning {
+  background: #fff5f5;
+  border-left: 8rpx solid #e74c3c;
+  margin-top: 20rpx;
+}

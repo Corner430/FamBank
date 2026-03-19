@@ -1,0 +1,51 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/transactions/index",
+    "pages/settings/index",
+    "pages/onboarding/index",
+    "pages/child-detail/index",
+    "pages/income/index",
+    "pages/wishlist/index",
+    "pages/settlement/index",
+    "pages/violation/index",
+    "pages/redemption/index",
+    "pages/config/index"
+  ],
+  "window": {
+    "backgroundTextStyle": "dark",
+    "navigationBarBackgroundColor": "#4A90D9",
+    "navigationBarTitleText": "FamBank",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F5F5F5"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#4A90D9",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "images/tab-home.png",
+        "selectedIconPath": "images/tab-home-active.png"
+      },
+      {
+        "pagePath": "pages/transactions/index",
+        "text": "账单",
+        "iconPath": "images/tab-bill.png",
+        "selectedIconPath": "images/tab-bill-active.png"
+      },
+      {
+        "pagePath": "pages/settings/index",
+        "text": "我的",
+        "iconPath": "images/tab-me.png",
+        "selectedIconPath": "images/tab-me-active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

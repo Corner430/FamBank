@@ -1,0 +1,67 @@
+<view class="container p-20">
+  <!-- Child selector -->
+  <child-selector
+    children="{{children}}"
+    selectedId="{{selectedChildId}}"
+    bind:select="onChildChange"
+  />
+
+  <!-- Action button -->
+  <button class="btn-primary mt-20" bindtap="toggleCreateForm">
+    {{showCreateForm ? '取消' : '记录违约'}}
+  </button>
+
+  <!-- Create form -->
+  <view wx:if="{{showCreateForm}}" class="card mt-20">
+    <view class="form-group">
+      <text class="form-label">违约金额（元）</text>
+      <input class="form-input" type="digit" placeholder="请输入违约金额"
+        value="{{newAmount}}" bindinput="onAmountInput" />
+    </view>
+    <view class="form-group">
+      <text class="form-label">已进入A的金额（元）</text>
+      <input class="form-input" type="digit" placeholder="选填，默认为0"
+        value="{{newAmountEnteredA}}" bindinput="onAmountEnteredAInput" />
+    </view>
+    <view class="form-group">
+      <text class="form-label">描述</text>
+      <input class="form-input" placeholder="请描述违约情况"
+        value="{{newDescription}}" bindinput="onDescriptionInput" />
+    </view>
+    <button class="btn-primary mt-20" bindtap="handleCreate">提交</button>
+  </view>
+
+  <!-- Loading -->
+  <view wx:if="{{loading}}" class="flex-center mt-30">
+    <text class="text-muted">加载中...</text>
+  </view>
+
+  <!-- Violations list -->
+  <block wx:elif="{{violations.length > 0}}">
+    <view class="section-header mt-30">
+      <text class="text-bold">违约记录</text>
+    </view>
+
+    <view wx:for="{{violations}}" wx:key="id" class="card violation-card mt-10">
+      <view class="flex-between">
+        <text class="text-small text-muted">{{item.displayDate}}</text>
+        <view wx:if="{{item.is_escalated}}" class="badge badge-escalated">升级处罚</view>
+      </view>
+      <text class="violation-desc mt-10">{{item.description}}</text>
+      <view class="flex violation-amounts mt-10">
+        <view class="violation-amount-item">
+          <text class="text-muted text-small">违约金额</text>
+          <text class="text-danger text-bold">¥{{item.displayAmount}}</text>
+        </view>
+        <view class="violation-amount-item">
+          <text class="text-muted text-small">罚金</text>
+          <text class="text-danger text-bold">¥{{item.displayPenalty}}</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view wx:elif="{{!loading}}" class="empty-state mt-30">
+    <text>暂无违约记录</text>
+  </view>
+</view>

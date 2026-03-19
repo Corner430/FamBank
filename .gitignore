@@ -1,27 +1,17 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-.venv/
-venv/
-*.egg
-.pytest_cache/
-.ruff_cache/
-htmlcov/
-.coverage
-
 # Node.js
 node_modules/
 dist/
 build/
 *.log
+npm-debug.log*
+
+# WeChat Mini Program
+miniprogram_npm/
+project.private.config.json
 
 # Environment
 .env
 .env.*
-!.env.example
 
 # IDE
 .vscode/
@@ -30,12 +20,13 @@ build/
 *.swo
 *~
 
+# AI/Dev tooling
+.claude/
+.codebuddy/
+
 # OS
 .DS_Store
 Thumbs.db
 
 # MySQL
 *.sql.bak
-
-# uv
-.python-version

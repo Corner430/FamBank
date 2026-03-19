@@ -1,0 +1,22 @@
+/* Wishlist page styles */
+.item-form-row {
+  margin-bottom: 20rpx;
+}
+
+.wishlist-item {
+  transition: all 0.3s;
+}
+
+.target-item {
+  border-left: 8rpx solid #f39c12;
+  background: #fffbf0;
+}
+
+.target-star {
+  color: #f39c12;
+  font-size: 36rpx;
+}
+
+.link-text {
+  text-decoration: underline;
+}

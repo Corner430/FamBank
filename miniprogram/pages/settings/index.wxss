@@ -1,0 +1,44 @@
+/* User Card */
+.user-card {
+  display: flex;
+  align-items: center;
+}
+
+.user-avatar {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  background: #4A90D9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 30rpx;
+  flex-shrink: 0;
+}
+
+.avatar-text {
+  color: #fff;
+  font-size: 40rpx;
+  font-weight: 700;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.user-name {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8rpx;
+}
+
+/* Link Items */
+.link-item {
+  padding: 28rpx 0;
+}
+
+.link-item:active {
+  background: #f9f9f9;
+}

@@ -1,0 +1,59 @@
+<view class="container p-20">
+  <!-- Execute button -->
+  <button class="btn-primary execute-btn" bindtap="handleExecute" disabled="{{executing}}">
+    {{executing ? '结算中...' : '执行结算'}}
+  </button>
+
+  <!-- Loading -->
+  <view wx:if="{{loading}}" class="flex-center mt-30">
+    <text class="text-muted">加载中...</text>
+  </view>
+
+  <!-- Latest result -->
+  <block wx:if="{{latestResult}}">
+    <view class="section-header mt-30">
+      <text class="text-bold">本次结算结果</text>
+      <text class="text-muted text-small">{{latestResult.settlement_date}}</text>
+    </view>
+
+    <settlement-report
+      wx:for="{{latestResult.results}}"
+      wx:key="child_name"
+      report="{{item}}"
+    />
+  </block>
+
+  <!-- History -->
+  <view class="section-header mt-30">
+    <text class="text-bold">结算历史</text>
+  </view>
+
+  <block wx:if="{{settlements.length > 0}}">
+    <view wx:for="{{settlements}}" wx:key="id" class="card mt-10">
+      <view class="flex-between">
+        <text class="text-bold">{{item.displayDate}}</text>
+      </view>
+      <view wx:for="{{item.results}}" wx:for-item="result" wx:key="child_name" class="settlement-row mt-10">
+        <text class="text-small text-bold">{{result.child_name}}</text>
+        <view class="flex settlement-details mt-10">
+          <view class="detail-chip">
+            <text class="text-muted text-small">C派息</text>
+            <text class="text-success text-small">+¥{{result.displayDividend}}</text>
+          </view>
+          <view class="detail-chip">
+            <text class="text-muted text-small">B溢出</text>
+            <text class="text-primary text-small">¥{{result.displayOverflow}}</text>
+          </view>
+          <view class="detail-chip">
+            <text class="text-muted text-small">B利息</text>
+            <text class="text-success text-small">+¥{{result.displayInterest}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <view wx:else class="empty-state mt-20">
+    <text>暂无结算记录</text>
+  </view>
+</view>

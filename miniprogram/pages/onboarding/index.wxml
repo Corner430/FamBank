@@ -1,0 +1,71 @@
+<view class="onboarding-page">
+  <!-- Choose Mode -->
+  <view wx:if="{{mode === 'choose'}}" class="choose-container">
+    <view class="logo-section">
+      <view class="logo-icon">🏦</view>
+      <view class="logo-title">FamBank</view>
+      <view class="logo-subtitle">家庭财商教育好帮手</view>
+    </view>
+
+    <view class="choose-cards">
+      <view class="choose-card" bindtap="switchMode" data-mode="create">
+        <view class="choose-card-icon">👨‍👩‍👧‍👦</view>
+        <view class="choose-card-title">创建家庭</view>
+        <view class="choose-card-desc">我是家长，创建一个新家庭</view>
+      </view>
+
+      <view class="choose-card" bindtap="switchMode" data-mode="join">
+        <view class="choose-card-icon">🔗</view>
+        <view class="choose-card-title">加入家庭</view>
+        <view class="choose-card-desc">我有邀请码，加入已有家庭</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Create Mode -->
+  <view wx:if="{{mode === 'create'}}" class="form-container">
+    <view class="form-header">
+      <view class="form-header-title">创建家庭</view>
+      <view class="form-header-desc">设置你的家庭名称和你的昵称</view>
+    </view>
+
+    <view class="card">
+      <view class="form-group">
+        <text class="form-label">家庭名称</text>
+        <input class="form-input" placeholder="例如：小明家" value="{{familyName}}" bindinput="onFamilyNameInput" maxlength="20" />
+      </view>
+
+      <view class="form-group">
+        <text class="form-label">你的名字</text>
+        <input class="form-input" placeholder="例如：爸爸" value="{{userName}}" bindinput="onUserNameInput" maxlength="10" />
+      </view>
+
+      <button class="btn-primary mt-30" bindtap="handleCreate" disabled="{{loading}}">
+        {{loading ? '创建中...' : '创建家庭'}}
+      </button>
+    </view>
+
+    <view class="back-link" bindtap="goBack">← 返回</view>
+  </view>
+
+  <!-- Join Mode -->
+  <view wx:if="{{mode === 'join'}}" class="form-container">
+    <view class="form-header">
+      <view class="form-header-title">加入家庭</view>
+      <view class="form-header-desc">输入家长分享给你的邀请码</view>
+    </view>
+
+    <view class="card">
+      <view class="form-group">
+        <text class="form-label">邀请码</text>
+        <input class="form-input invite-code-input" placeholder="请输入8位邀请码" value="{{inviteCode}}" bindinput="onInviteCodeInput" maxlength="8" />
+      </view>
+
+      <button class="btn-primary mt-30" bindtap="handleJoin" disabled="{{loading}}">
+        {{loading ? '加入中...' : '加入家庭'}}
+      </button>
+    </view>
+
+    <view class="back-link" bindtap="goBack">← 返回</view>
+  </view>
+</view>

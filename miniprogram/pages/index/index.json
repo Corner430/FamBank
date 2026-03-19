@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "FamBank",
+  "usingComponents": {
+    "account-card": "/components/account-card/index"
+  }
+}

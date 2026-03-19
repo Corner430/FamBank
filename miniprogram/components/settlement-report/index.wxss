@@ -1,0 +1,115 @@
+.settlement-report {
+  background-color: #ffffff;
+  border-radius: 16rpx;
+  padding: 28rpx 32rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+}
+
+.report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 20rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+  margin-bottom: 20rpx;
+}
+
+.child-name {
+  font-size: 32rpx;
+  color: #333333;
+  font-weight: bold;
+}
+
+.settlement-date {
+  font-size: 24rpx;
+  color: #999999;
+}
+
+/* Settlement items */
+.report-items {
+  margin-bottom: 24rpx;
+}
+
+.report-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14rpx 0;
+}
+
+.report-row.highlight {
+  border-top: 1rpx solid #f0f0f0;
+  margin-top: 8rpx;
+  padding-top: 20rpx;
+}
+
+.row-label {
+  font-size: 28rpx;
+  color: #666666;
+}
+
+.row-value {
+  font-size: 28rpx;
+  color: #333333;
+  font-weight: 500;
+}
+
+.report-row.highlight .row-label {
+  color: #4A90D9;
+  font-weight: 500;
+}
+
+.report-row.highlight .row-value {
+  color: #4A90D9;
+  font-weight: bold;
+}
+
+/* Snapshot section */
+.snapshot-section {
+  border-top: 1rpx solid #f0f0f0;
+  padding-top: 20rpx;
+}
+
+.snapshot-title {
+  font-size: 26rpx;
+  color: #999999;
+  margin-bottom: 16rpx;
+  display: block;
+}
+
+.snapshot-table {
+  width: 100%;
+}
+
+.snapshot-header-row {
+  display: flex;
+  padding: 12rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.snapshot-row {
+  display: flex;
+  padding: 12rpx 0;
+}
+
+.snapshot-row:not(:last-child) {
+  border-bottom: 1rpx solid #fafafa;
+}
+
+.snapshot-cell {
+  flex: 1;
+  font-size: 24rpx;
+  color: #333333;
+  text-align: center;
+}
+
+.snapshot-cell.label {
+  text-align: left;
+  color: #666666;
+  font-weight: 500;
+}
+
+.snapshot-header-row .snapshot-cell {
+  color: #999999;
+  font-size: 22rpx;
+}

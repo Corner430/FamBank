@@ -1,0 +1,14 @@
+<view class="member-list">
+  <view class="member-item" wx:for="{{members}}" wx:key="id">
+    <view class="member-avatar">
+      <text class="avatar-text">{{item.name[0]}}</text>
+    </view>
+    <text class="member-name">{{item.name}}</text>
+    <view class="role-badge {{item.role === 'parent' ? 'parent' : 'child'}}">
+      <text class="role-badge-text">{{item.role === 'parent' ? '家长' : '孩子'}}</text>
+    </view>
+  </view>
+  <view class="empty-tip" wx:if="{{members.length === 0}}">
+    <text class="empty-text">暂无家庭成员</text>
+  </view>
+</view>

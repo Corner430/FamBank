@@ -1,0 +1,34 @@
+/* Config page styles */
+.config-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.config-row:last-child {
+  border-bottom: none;
+}
+
+.config-label {
+  font-size: 28rpx;
+  flex: 1;
+}
+
+.config-value {
+  font-size: 30rpx;
+  color: #333;
+  text-align: right;
+}
+
+.picker-display {
+  display: flex;
+  align-items: center;
+  min-height: 72rpx;
+  color: #333;
+}
+
+.announcement-card {
+  border-left: 6rpx solid #f39c12;
+}

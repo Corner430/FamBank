@@ -1,0 +1,104 @@
+.account-card {
+  background-color: #ffffff;
+  border-radius: 16rpx;
+  padding: 28rpx 32rpx;
+  margin-bottom: 20rpx;
+  border-left: 8rpx solid #4A90D9;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.type-badge {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 12rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16rpx;
+}
+
+.type-badge-text {
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: bold;
+}
+
+.account-name {
+  font-size: 30rpx;
+  color: #333333;
+  font-weight: 500;
+  flex: 1;
+}
+
+.status-badges {
+  display: flex;
+  gap: 8rpx;
+}
+
+.status-badge {
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+}
+
+.status-badge.warning {
+  background-color: rgba(243, 156, 18, 0.12);
+}
+
+.status-badge.danger {
+  background-color: rgba(231, 76, 60, 0.12);
+}
+
+.status-badge-text {
+  font-size: 20rpx;
+}
+
+.status-badge.warning .status-badge-text {
+  color: #f39c12;
+}
+
+.status-badge.danger .status-badge-text {
+  color: #e74c3c;
+}
+
+.card-body {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 12rpx;
+}
+
+.balance-label {
+  font-size: 24rpx;
+  color: #999999;
+  margin-right: 12rpx;
+}
+
+.balance-value {
+  font-size: 44rpx;
+  color: #333333;
+  font-weight: bold;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.interest-label {
+  font-size: 24rpx;
+  color: #999999;
+  margin-right: 12rpx;
+}
+
+.interest-value {
+  font-size: 28rpx;
+  color: #27ae60;
+  font-weight: 500;
+}

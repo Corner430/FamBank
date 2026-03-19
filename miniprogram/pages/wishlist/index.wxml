@@ -1,0 +1,108 @@
+<view class="container p-20">
+  <!-- Loading -->
+  <view wx:if="{{loading}}" class="flex-center" style="padding-top: 200rpx;">
+    <text class="text-muted">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <!-- No wish list -->
+    <block wx:if="{{!wishList}}">
+      <view class="empty-state">
+        <text>还没有愿望清单</text>
+      </view>
+      <view wx:if="{{isParentRole}}" class="mt-30">
+        <button class="btn-primary" bindtap="toggleCreateForm">创建愿望清单</button>
+      </view>
+    </block>
+
+    <!-- Create form -->
+    <view wx:if="{{showCreateForm}}" class="card mt-20">
+      <view class="form-group">
+        <text class="form-label">最高价格（元）</text>
+        <input class="form-input" type="digit" placeholder="请输入最高价格"
+          value="{{newMaxPrice}}" bindinput="onMaxPriceInput" />
+      </view>
+
+      <view class="divider"></view>
+      <text class="text-bold mb-20" style="display:block;">商品列表</text>
+
+      <view wx:for="{{newItems}}" wx:key="index" class="item-form-row">
+        <view class="form-group">
+          <text class="form-label">商品名称</text>
+          <input class="form-input" placeholder="名称" value="{{item.name}}"
+            data-idx="{{index}}" bindinput="onItemNameInput" />
+        </view>
+        <view class="form-group">
+          <text class="form-label">价格（元）</text>
+          <input class="form-input" type="digit" placeholder="价格" value="{{item.price}}"
+            data-idx="{{index}}" bindinput="onItemPriceInput" />
+        </view>
+        <view class="form-group">
+          <text class="form-label">链接（选填）</text>
+          <input class="form-input" placeholder="商品链接" value="{{item.url}}"
+            data-idx="{{index}}" bindinput="onItemUrlInput" />
+        </view>
+        <view wx:if="{{newItems.length > 1}}" class="flex" style="justify-content: flex-end;">
+          <button class="btn-danger btn-small" data-idx="{{index}}" bindtap="removeItem">删除</button>
+        </view>
+        <view wx:if="{{index < newItems.length - 1}}" class="divider"></view>
+      </view>
+
+      <button class="btn-secondary mt-20" bindtap="addItem">+ 添加商品</button>
+      <view class="flex mt-20" style="gap: 20rpx;">
+        <button class="btn-secondary" style="flex:1;" bindtap="toggleCreateForm">取消</button>
+        <button class="btn-primary" style="flex:1;" bindtap="handleCreate">确认创建</button>
+      </view>
+    </view>
+
+    <!-- Wish list display -->
+    <block wx:if="{{wishList}}">
+      <view class="card">
+        <view class="flex-between">
+          <text class="text-bold text-large">愿望清单</text>
+          <view class="badge" style="background: #f0f4ff; color: #4A90D9;">
+            最高 ¥{{wishList.displayMaxPrice}}
+          </view>
+        </view>
+      </view>
+
+      <view class="mt-20">
+        <view
+          wx:for="{{wishList.items}}"
+          wx:key="id"
+          class="card wishlist-item {{item.isTarget ? 'target-item' : ''}} mt-10"
+        >
+          <view class="flex-between">
+            <view class="flex" style="align-items: center; gap: 12rpx;">
+              <text wx:if="{{item.isTarget}}" class="target-star">★</text>
+              <text class="text-bold">{{item.name}}</text>
+            </view>
+            <text class="text-primary text-bold">¥{{item.displayPrice}}</text>
+          </view>
+
+          <view wx:if="{{item.url}}" class="mt-10">
+            <text class="text-small text-primary link-text" data-url="{{item.url}}" bindtap="onOpenUrl">
+              复制链接
+            </text>
+          </view>
+
+          <view class="flex mt-10" style="gap: 16rpx; justify-content: flex-end;">
+            <button class="btn-small btn-secondary"
+              data-item-id="{{item.id}}" data-current-price="{{item.price}}"
+              bindtap="handleUpdatePrice">
+              更新价格
+            </button>
+            <button wx:if="{{!item.isTarget}}" class="btn-small btn-primary"
+              data-item-id="{{item.id}}" bindtap="handleDeclareTarget">
+              设为标的
+            </button>
+          </view>
+        </view>
+      </view>
+
+      <button wx:if="{{wishList.hasTarget}}" class="btn-danger mt-30" bindtap="handleClearTarget">
+        清除标的
+      </button>
+    </block>
+  </block>
+</view>

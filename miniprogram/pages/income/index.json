@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "记录收入",
+  "usingComponents": {
+    "child-selector": "/components/child-selector/index"
+  }
+}

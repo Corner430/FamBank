@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "我的",
+  "usingComponents": {
+    "family-member-list": "/components/family-member-list/index",
+    "invitation-manager": "/components/invitation-manager/index"
+  }
+}

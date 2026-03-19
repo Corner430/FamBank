@@ -1,0 +1,37 @@
+<scroll-view
+  class="transaction-list"
+  scroll-y
+  bindscrolltolower="onScrollToLower"
+  style="height: 100%;"
+>
+  <view class="tx-item" wx:for="{{items}}" wx:key="id">
+    <view class="tx-main">
+      <view class="tx-left">
+        <text class="tx-type">{{txTypeLabels[item.type] || item.type}}</text>
+        <text class="tx-desc" wx:if="{{item.description}}">{{item.description}}</text>
+      </view>
+      <view class="tx-right">
+        <text class="tx-amount {{item.source_account ? 'negative' : 'positive'}}">
+          {{item.source_account ? '-' : '+'}}¥{{item.amount}}
+        </text>
+        <text class="tx-time">{{item.timestamp}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- Load more -->
+  <view class="load-more" wx:if="{{loading}}">
+    <text class="load-more-text">加载中...</text>
+  </view>
+  <view class="load-more" wx:elif="{{hasMore}}">
+    <text class="load-more-text">上拉加载更多</text>
+  </view>
+  <view class="load-more" wx:elif="{{items.length > 0 && !hasMore}}">
+    <text class="load-more-text">没有更多了</text>
+  </view>
+
+  <!-- Empty state -->
+  <view class="empty-tip" wx:if="{{items.length === 0 && !loading}}">
+    <text class="empty-text">暂无交易记录</text>
+  </view>
+</scroll-view>

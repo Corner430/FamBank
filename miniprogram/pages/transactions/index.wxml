@@ -1,0 +1,43 @@
+<view class="container">
+  <!-- Child Selector (Parent Only) -->
+  <child-selector
+    wx:if="{{isParent}}"
+    children="{{children}}"
+    selectedId="{{selectedChildId}}"
+    bind:select="onChildSelect"
+  />
+
+  <!-- Filter Tabs -->
+  <view class="filter-tabs">
+    <view
+      wx:for="{{filters}}"
+      wx:key="key"
+      class="filter-tab {{filterAccount === item.key ? 'filter-tab-active' : ''}}"
+      bindtap="onFilterChange"
+      data-key="{{item.key}}"
+    >
+      {{item.label}}
+    </view>
+  </view>
+
+  <!-- Transaction List -->
+  <block wx:if="{{items.length > 0}}">
+    <transaction-list items="{{items}}" />
+  </block>
+
+  <!-- Empty State -->
+  <view wx:if="{{!loading && items.length === 0}}" class="empty-state">
+    <view class="empty-state-icon">📋</view>
+    <view class="empty-state-text">暂无交易记录</view>
+  </view>
+
+  <!-- Loading More -->
+  <view wx:if="{{loading}}" class="loading-container">
+    <text class="text-muted">加载中...</text>
+  </view>
+
+  <!-- No More -->
+  <view wx:if="{{!hasMore && items.length > 0}}" class="no-more">
+    <text class="text-muted text-small">没有更多了</text>
+  </view>
+</view>

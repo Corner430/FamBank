@@ -1,0 +1,10 @@
+{
+  "name": "config-fn",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3",
+    "mysql2": "^3.6.0",
+    "@fambank/shared": "file:../_shared"
+  }
+}

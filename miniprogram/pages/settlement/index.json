@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "月度结算",
+  "usingComponents": {
+    "settlement-report": "/components/settlement-report/index"
+  }
+}

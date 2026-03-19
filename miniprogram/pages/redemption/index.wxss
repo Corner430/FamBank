@@ -1,0 +1,46 @@
+/* Redemption page styles */
+.balance-card {
+  border-left: 6rpx solid #9b59b6;
+}
+
+.request-card {
+  border-left: 6rpx solid #9b59b6;
+}
+
+.request-amounts {
+  gap: 30rpx;
+}
+
+.request-amount-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.requester-name {
+  font-size: 28rpx;
+}
+
+.request-reason {
+  font-size: 26rpx;
+}
+
+.action-buttons {
+  gap: 20rpx;
+}
+
+.badge-approved {
+  background: #27ae60;
+  color: #fff;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+}
+
+.badge-rejected {
+  background: #e74c3c;
+  color: #fff;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+}

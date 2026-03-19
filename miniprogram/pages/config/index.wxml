@@ -1,0 +1,61 @@
+<view class="container p-20">
+  <!-- Loading -->
+  <view wx:if="{{loading}}" class="flex-center" style="padding-top: 200rpx;">
+    <text class="text-muted">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <!-- Current config grouped -->
+    <view wx:for="{{configGroups}}" wx:key="name" class="mt-20">
+      <view class="section-header">
+        <text class="text-bold text-large">{{item.name}}</text>
+      </view>
+      <view class="card mt-10">
+        <view wx:for="{{item.items}}" wx:for-item="cfg" wx:key="key" class="config-row"
+          data-key="{{cfg.key}}" data-label="{{cfg.label}}" bindtap="openAnnounceForm">
+          <text class="config-label text-muted">{{cfg.label}}</text>
+          <text class="config-value text-bold">{{cfg.displayValue}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- Announce form modal -->
+    <view wx:if="{{showAnnounceForm}}" class="card mt-20">
+      <view class="flex-between">
+        <text class="text-bold">公告变更：{{announceLabel}}</text>
+        <text class="text-muted" bindtap="closeAnnounceForm">取消</text>
+      </view>
+      <view class="form-group mt-10">
+        <text class="form-label">新值</text>
+        <input class="form-input" placeholder="请输入新值" type="number"
+          value="{{announceNewValue}}" bindinput="onAnnounceValueInput" />
+      </view>
+      <button class="btn-primary mt-20" bindtap="handleAnnounce"
+        loading="{{announceLoading}}" disabled="{{announceLoading}}">提交公告</button>
+    </view>
+
+    <view class="divider mt-30"></view>
+
+    <!-- Pending announcements -->
+    <view class="section-header mt-20">
+      <text class="text-bold">待生效公告</text>
+    </view>
+
+    <block wx:if="{{announcements.length > 0}}">
+      <view wx:for="{{announcements}}" wx:key="id" class="card announcement-card mt-10">
+        <view class="flex-between">
+          <text class="text-bold">{{item.label}}</text>
+          <view class="badge" style="background: #fff3e0; color: #f39c12;">待生效</view>
+        </view>
+        <view class="flex-between mt-10">
+          <text class="text-muted text-small">新值: {{item.new_value}}</text>
+          <text class="text-warning text-small">{{item.displayDate}} 生效</text>
+        </view>
+      </view>
+    </block>
+
+    <view wx:else class="empty-state mt-20">
+      <text>暂无待生效公告</text>
+    </view>
+  </block>
+</view>

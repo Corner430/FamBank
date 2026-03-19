@@ -1,0 +1,102 @@
+<view class="container">
+  <!-- Loading -->
+  <view wx:if="{{loading}}" class="loading-container">
+    <text class="text-muted">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <!-- Child Name Header -->
+    <view class="child-header">
+      <view class="child-avatar">
+        <text class="child-avatar-text">{{childName[0] || '?'}}</text>
+      </view>
+      <view class="child-name">{{childName}}</view>
+    </view>
+
+    <!-- Account Cards -->
+    <view wx:for="{{accounts}}" wx:key="id">
+      <account-card account="{{item}}" />
+    </view>
+
+    <!-- Total Debt -->
+    <view wx:if="{{totalDebt !== '0.00'}}" class="card debt-card">
+      <view class="flex-between">
+        <text class="text-danger text-bold">总欠款</text>
+        <text class="text-danger text-bold text-large">¥{{totalDebt}}</text>
+      </view>
+    </view>
+
+    <!-- Action Buttons -->
+    <view class="card">
+      <view class="section-header">操作</view>
+
+      <view class="action-grid">
+        <view class="action-btn action-btn-a" bindtap="openSpendA">
+          <text class="action-btn-icon">💰</text>
+          <text class="action-btn-label">A消费</text>
+        </view>
+        <view class="action-btn action-btn-b" bindtap="openPurchaseB">
+          <text class="action-btn-icon">🛒</text>
+          <text class="action-btn-label">B购买</text>
+        </view>
+        <view class="action-btn action-btn-b" bindtap="openRefundB">
+          <text class="action-btn-icon">↩️</text>
+          <text class="action-btn-label">B退款</text>
+        </view>
+        <view class="action-btn" bindtap="navigateToTransactions">
+          <text class="action-btn-icon">📋</text>
+          <text class="action-btn-label">查看交易</text>
+        </view>
+        <view class="action-btn" bindtap="navigateToWishlist">
+          <text class="action-btn-icon">⭐</text>
+          <text class="action-btn-label">愿望清单</text>
+        </view>
+        <view class="action-btn" bindtap="navigateToIncome">
+          <text class="action-btn-icon">📥</text>
+          <text class="action-btn-label">记录收入</text>
+        </view>
+        <view class="action-btn" bindtap="navigateToRedemption">
+          <text class="action-btn-icon">💎</text>
+          <text class="action-btn-label">C赎回</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <!-- Modal Overlay -->
+  <view wx:if="{{showModal}}" class="modal-overlay" bindtap="closeModal">
+    <view class="modal-content" catchtap="">
+      <view class="modal-header">
+        <text class="modal-title">{{modalTitle}}</text>
+        <view class="modal-close" bindtap="closeModal">✕</view>
+      </view>
+
+      <view class="form-group">
+        <text class="form-label">金额 (元)</text>
+        <input
+          class="form-input"
+          type="digit"
+          placeholder="0.00"
+          value="{{modalAmount}}"
+          bindinput="onModalAmountInput"
+          focus="{{showModal}}"
+        />
+      </view>
+
+      <view class="form-group">
+        <text class="form-label">说明</text>
+        <input
+          class="form-input"
+          placeholder="请输入说明"
+          value="{{modalDescription}}"
+          bindinput="onModalDescriptionInput"
+          maxlength="50"
+        />
+      </view>
+
+      <button class="btn-primary mt-20" bindtap="handleModalSubmit" disabled="{{modalLoading}}">
+        {{modalLoading ? '提交中...' : '确认'}}
+      </button>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "C赎回",
+  "usingComponents": {
+    "child-selector": "/components/child-selector/index"
+  }
+}

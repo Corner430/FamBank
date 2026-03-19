@@ -1,0 +1,116 @@
+/* Child Header */
+.child-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.child-avatar {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 50%;
+  background: #27ae60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.child-avatar-text {
+  color: #fff;
+  font-size: 36rpx;
+  font-weight: 700;
+}
+
+.child-name {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+/* Debt Card */
+.debt-card {
+  border-left: 6rpx solid #e74c3c;
+}
+
+/* Action Grid */
+.action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+}
+
+.action-btn {
+  width: calc(33.33% - 14rpx);
+  background: #f8f9fa;
+  border-radius: 16rpx;
+  padding: 24rpx 0;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.action-btn:active {
+  background: #e9ecef;
+}
+
+.action-btn-a {
+  border-bottom: 4rpx solid #4A90D9;
+}
+
+.action-btn-b {
+  border-bottom: 4rpx solid #27ae60;
+}
+
+.action-btn-icon {
+  font-size: 44rpx;
+  margin-bottom: 8rpx;
+}
+
+.action-btn-label {
+  font-size: 24rpx;
+  color: #333;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #fff;
+  border-radius: 20rpx;
+  padding: 40rpx;
+  width: 600rpx;
+  max-width: 90%;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.modal-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.modal-close {
+  font-size: 36rpx;
+  color: #999;
+  padding: 10rpx;
+}

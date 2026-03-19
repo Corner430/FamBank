@@ -1,0 +1,66 @@
+<view class="invitation-manager">
+  <!-- Create button -->
+  <view class="create-btn" bindtap="toggleCreateForm">
+    <text class="create-btn-text">{{showCreateForm ? '取消' : '+ 创建邀请'}}</text>
+  </view>
+
+  <!-- Create form -->
+  <view class="create-form" wx:if="{{showCreateForm}}">
+    <view class="form-row">
+      <text class="form-label">角色</text>
+      <radio-group class="role-picker" bindchange="onRoleChange">
+        <label class="role-option">
+          <radio value="child" checked="{{targetRole === 'child'}}" color="#4A90D9" />
+          <text>孩子</text>
+        </label>
+        <label class="role-option">
+          <radio value="parent" checked="{{targetRole === 'parent'}}" color="#4A90D9" />
+          <text>家长</text>
+        </label>
+      </radio-group>
+    </view>
+    <view class="form-row">
+      <text class="form-label">名称</text>
+      <input
+        class="form-input"
+        placeholder="请输入被邀请人名称"
+        value="{{targetName}}"
+        bindinput="onNameInput"
+      />
+    </view>
+    <view class="confirm-btn" bindtap="createInvitation">
+      <text class="confirm-btn-text">确认创建</text>
+    </view>
+  </view>
+
+  <!-- Invitation list -->
+  <view class="invitation-list">
+    <view class="invitation-item" wx:for="{{invitations}}" wx:key="id">
+      <view class="invitation-header">
+        <view class="code-area" bindtap="copyCode" data-code="{{item.code}}">
+          <text class="code-text">{{item.code}}</text>
+          <text class="copy-hint">点击复制</text>
+        </view>
+        <view class="status-badge status-{{item.status}}">
+          <text class="status-text">{{item.status === 'pending' ? '待使用' : item.status === 'used' ? '已使用' : item.status === 'revoked' ? '已撤销' : '已过期'}}</text>
+        </view>
+      </view>
+      <view class="invitation-detail">
+        <text class="detail-text">{{item.target_name || item.name}} · {{item.role === 'parent' ? '家长' : '孩子'}}</text>
+        <text class="detail-expiry" wx:if="{{item.expire_at}}">有效期至 {{item.expire_at}}</text>
+      </view>
+      <view
+        class="revoke-btn"
+        wx:if="{{item.status === 'pending'}}"
+        bindtap="revokeInvitation"
+        data-id="{{item.id}}"
+      >
+        <text class="revoke-btn-text">撤销</text>
+      </view>
+    </view>
+
+    <view class="empty-tip" wx:if="{{invitations.length === 0 && !loading}}">
+      <text class="empty-text">暂无邀请记录</text>
+    </view>
+  </view>
+</view>

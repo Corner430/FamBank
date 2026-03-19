@@ -1,0 +1,26 @@
+<view class="account-card" style="border-left-color: {{accountColors[_type]}};">
+  <view class="card-header">
+    <view class="type-badge" style="background-color: {{accountColors[_type]}};">
+      <text class="type-badge-text">{{_type}}</text>
+    </view>
+    <text class="account-name">{{_name}}</text>
+    <view class="status-badges" wx:if="{{_type === 'B'}}">
+      <view class="status-badge warning" wx:if="{{_isInterestSuspended}}">
+        <text class="status-badge-text">利息暂停</text>
+      </view>
+      <view class="status-badge danger" wx:if="{{_isDepositSuspended}}">
+        <text class="status-badge-text">存入暂停</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="card-body">
+    <text class="balance-label">余额</text>
+    <text class="balance-value">¥{{_balance}}</text>
+  </view>
+
+  <view class="card-footer" wx:if="{{_type === 'B'}}">
+    <text class="interest-label">利息池</text>
+    <text class="interest-value">¥{{_interestPool}}</text>
+  </view>
+</view>

@@ -1,0 +1,73 @@
+<view class="container">
+  <!-- Loading -->
+  <view wx:if="{{loading}}" class="loading-container">
+    <text class="text-muted">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <!-- User Info Card -->
+    <view class="card user-card" wx:if="{{user}}">
+      <view class="user-avatar">
+        <text class="avatar-text">{{user.name[0] || '?'}}</text>
+      </view>
+      <view class="user-info">
+        <view class="user-name">{{user.name}}</view>
+        <view class="badge {{isParent ? 'badge-parent' : 'badge-child'}}">
+          {{isParent ? '家长' : '孩子'}}
+        </view>
+      </view>
+    </view>
+
+    <!-- Family Info Card -->
+    <view class="card" wx:if="{{familyDetail}}">
+      <view class="section-header">家庭信息</view>
+      <view class="list-item">
+        <text class="text-muted">家庭名称</text>
+        <text class="text-bold">{{familyDetail.family.name}}</text>
+      </view>
+    </view>
+
+    <!-- Members Section -->
+    <view class="card" wx:if="{{familyDetail}}">
+      <view class="section-header">家庭成员</view>
+      <block wx:if="{{isParent}}">
+        <family-member-list members="{{familyDetail.members}}" />
+      </block>
+      <block wx:else>
+        <view wx:for="{{familyDetail.members}}" wx:key="id" class="list-item">
+          <text>{{item.name}}</text>
+          <view class="badge {{item.role === 'parent' ? 'badge-parent' : 'badge-child'}}">
+            {{item.role === 'parent' ? '家长' : '孩子'}}
+          </view>
+        </view>
+      </block>
+    </view>
+
+    <!-- Parent Only: Invitation Manager -->
+    <view wx:if="{{isParent}}" class="card">
+      <view class="section-header">邀请管理</view>
+      <invitation-manager />
+    </view>
+
+    <!-- Parent Only: Quick Links -->
+    <view wx:if="{{isParent}}" class="card">
+      <view class="section-header">管理</view>
+      <view class="list-item link-item" bindtap="navigateToConfig">
+        <text>参数配置</text>
+        <text class="text-muted">›</text>
+      </view>
+      <view class="list-item link-item" bindtap="navigateToSettlement">
+        <text>结算</text>
+        <text class="text-muted">›</text>
+      </view>
+      <view class="list-item link-item" bindtap="navigateToViolations">
+        <text>违约记录</text>
+        <text class="text-muted">›</text>
+      </view>
+      <view class="list-item link-item" bindtap="navigateToRedemption">
+        <text>C赎回管理</text>
+        <text class="text-muted">›</text>
+      </view>
+    </view>
+  </block>
+</view>

@@ -1,0 +1,91 @@
+<view class="container">
+  <!-- Input Form -->
+  <view wx:if="{{!result}}">
+    <!-- Child Selector -->
+    <child-selector
+      children="{{children}}"
+      selectedId="{{selectedChildId}}"
+      bind:select="onChildSelect"
+    />
+
+    <view class="card mt-20">
+      <view class="form-group">
+        <text class="form-label">金额 (元)</text>
+        <input
+          class="form-input amount-input"
+          type="digit"
+          placeholder="0.00"
+          value="{{amount}}"
+          bindinput="onAmountInput"
+        />
+      </view>
+
+      <view class="form-group">
+        <text class="form-label">说明</text>
+        <input
+          class="form-input"
+          placeholder="例如：做家务、零花钱"
+          value="{{description}}"
+          bindinput="onDescriptionInput"
+          maxlength="50"
+        />
+      </view>
+
+      <button class="btn-primary mt-30" bindtap="handleSubmit" disabled="{{loading}}">
+        {{loading ? '提交中...' : '记录收入'}}
+      </button>
+    </view>
+  </view>
+
+  <!-- Result Card -->
+  <view wx:if="{{result}}" class="result-section">
+    <view class="result-header">
+      <view class="result-icon">✅</view>
+      <view class="result-title">收入已记录</view>
+    </view>
+
+    <view class="card">
+      <view class="section-header">分流明细</view>
+
+      <view class="split-row">
+        <view class="split-label">
+          <view class="split-dot dot-a"></view>
+          <text>零钱宝 (A)</text>
+        </view>
+        <text class="text-bold">¥{{result.splitA}}</text>
+      </view>
+
+      <view class="split-row">
+        <view class="split-label">
+          <view class="split-dot dot-b"></view>
+          <text>梦想金 (B)</text>
+        </view>
+        <text class="text-bold">¥{{result.splitB}}</text>
+      </view>
+
+      <view class="split-row">
+        <view class="split-label">
+          <view class="split-dot dot-c"></view>
+          <text>牛马金 (C)</text>
+        </view>
+        <text class="text-bold">¥{{result.splitC}}</text>
+      </view>
+
+      <view class="divider"></view>
+
+      <view wx:if="{{result.debtRepaid !== '0.00'}}" class="split-row">
+        <text class="text-muted">欠款偿还</text>
+        <text class="text-danger">¥{{result.debtRepaid}}</text>
+      </view>
+
+      <view wx:if="{{result.escrowed !== '0.00'}}" class="split-row">
+        <text class="text-muted">代管入金</text>
+        <text class="text-warning">¥{{result.escrowed}}</text>
+      </view>
+    </view>
+
+    <button class="btn-secondary mt-30" bindtap="handleRecordAnother">
+      继续记录
+    </button>
+  </view>
+</view>

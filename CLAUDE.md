@@ -1,92 +1,154 @@
-# FamBank Development Guidelines
+# FamBank 开发指南（AI 助手参考）
 
-Auto-generated from all feature plans. Last updated: 2026-02-28
+微信小程序家庭银行，运行在腾讯云 CloudBase 上。
 
-## Active Technologies
-- Python 3.12 (backend, managed by uv), TypeScript (frontend) (001-fambank-core)
-- FastAPI, Pydantic, uvicorn, aiomysql/SQLAlchemy, Vue 3, Vite (001-fambank-core)
-- MySQL 8.0 (InnoDB), monetary values as BIGINT cents (001-fambank-core)
-- structlog: 结构化 JSON 日志，所有 service 和 HTTP 请求均覆盖
-- pytest (backend), Vitest (frontend) (001-fambank-core)
-- systemd (进程管理), GitHub Actions (CI/CD)
-- Python 3.12 (backend, managed by uv), TypeScript (frontend) + FastAPI, Pydantic, uvicorn, aiomysql/SQLAlchemy, PyJWT, Vue 3, Vue Router, Vite (002-multi-tenant-platform)
+## 环境信息
 
-## Project Structure
+- CloudBase 环境: `fambank-prod-5g8v3rta823bda48`
+- 小程序 AppID: `wx93708d49ac4c843c`
+- 数据库: CloudBase MySQL，14 张表
+- 云函数运行时: Node.js 16.13（CloudBase 控制台配置）
 
-```text
-backend/
-  app/
-    main.py, auth.py, database.py, logging_config.py
-    middleware/          # RequestLoggingMiddleware, SecurityHeadersMiddleware
-    models/              # account, config, debt, escrow, family, invitation,
-                         # redemption_request, refresh_token, settlement,
-                         # sms_code, transaction, user, violation, wishlist
-    services/            # auth, config, escrow, family, income, interest,
-                         # overflow, purchase, redemption, settlement, sms,
-                         # spending, tenant, transaction, violation, wishlist
-    api/                 # accounts, auth, config, deps, family, income,
-                         # redemption, settlement, transactions, violations, wishlist
-    schemas/             # auth, common, config, family, income, purchase,
-                         # redemption, settlement, spending, transaction,
-                         # violation, wishlist
-    migrations/          # init.sql, seed.sql
-  tests/
-    unit/, integration/, conftest.py
-  pyproject.toml, uv.lock
+## 项目结构
 
-frontend/
-  src/
-    pages/               # 11 个 Vue 页面
-    components/          # AccountCard, ChildSelector, FamilyMemberList,
-                         # HelloWorld, InvitationManager, SettlementReport,
-                         # TransactionList
-    services/, router/
-  package.json, vite.config.ts
+```
+miniprogram/
+  app.js                    # 入口：CloudBase init + 自动登录 + loginReadyCallback 机制
+  pages/                    # 11 个页面（每页 js/json/wxml/wxss 四件套）
+    index/                  #   首页仪表盘（家长看孩子概览，孩子看自己账户）
+    onboarding/             #   引导：创建家庭 / 输入邀请码加入
+    child-detail/           #   孩子详情：A消费/B购物/B退款操作
+    income/                 #   记录收入（仅家长）
+    transactions/           #   交易记录（分页+筛选）
+    wishlist/               #   愿望清单管理
+    settlement/             #   月度结算（仅家长）
+    violation/              #   违约记录（仅家长）
+    redemption/             #   C 赎回（孩子申请，家长审批）
+    config/                 #   参数配置（仅家长）
+    settings/               #   设置页（家庭信息、入口导航）
+  components/               # 6 个组件
+    account-card/           #   账户卡片展示
+    child-selector/         #   孩子选择器（家长视角切换孩子）
+    family-member-list/     #   家庭成员列表
+    invitation-manager/     #   邀请码创建/撤销
+    settlement-report/      #   结算结果展示
+    transaction-list/       #   交易列表
+  utils/
+    cloud.js                #   callCloud(name, action, data) 封装
+    auth.js                 #   waitForLogin() / getRole() / getUserId()
+    money.js                #   centsToYuan() 前端格式化
+    constants.js            #   账户名称、颜色、交易类型标签
 
-specs/
-  001-fambank-core/                # 核心功能设计文档
-  002-multi-tenant-platform/       # 多租户平台设计文档
-
-deploy/
-  fambank.service, setup.sh
-
-.github/workflows/
-  ci-deploy.yml
+cloudfunctions/
+  _shared/                  # 共享模块 (@fambank/shared)
+    db.js                   #   MySQL 连接池（读 MYSQL_ADDRESS 等环境变量）
+    money.js                #   yuanToCents() / centsToYuan() / calculateSplit() — BigInt
+    errors.js               #   ok() / badRequest() / serverError() 等响应格式
+    auth-helper.js          #   getOrCreateUser / getUserByOpenid / requireParent / resolveChildId
+    config-loader.js        #   getConfigValue / getConfigRatios / getAllConfig / DEFAULT_CONFIG
+    interest.js             #   calculateCDividend / calculateBInterest
+    overflow.js             #   calculateOverflow（B → C 溢出）
+    p-active.js             #   getPActive（愿望清单目标价格，排除过期清单）
+  auth/                     # login
+  family/                   # create / join / detail / dashboard / createInvitation / listInvitations / revokeInvitation
+  accounts/                 # list / spendA / purchaseB / refundB
+  income/                   # create（仅家长）
+  transactions/             # list
+  settlement/               # execute / list — 最复杂，使用 advisory lock
+  violations/               # create（仅家长）/ list
+  redemption/               # request / approve / listPending
+  wishlist/                 # get / create / updatePrice / declareTarget / clearTarget
+  config/                   # list / announce / listAnnouncements
 ```
 
-## Commands
+## 关键开发约定
+
+### 金额处理
+
+前端传元字符串（如 `"100.50"`），后端用 `yuanToCents()` 转为 BigInt 分（`10050n`），数据库存 BIGINT。返回前端时用 `centsToYuan()` 转回元字符串。所有运算使用 BigInt，禁止浮点。
+
+### 云函数路由
+
+每个云函数通过 `event.action` 分发：
+
+```javascript
+switch (event.action) {
+  case 'create': requireParent(user); return await handleCreate(user, event);
+  case 'list': return await handleList(user, event);
+  default: return badRequest('未知操作');
+}
+```
+
+### 响应格式
+
+```javascript
+// 成功
+ok(data)     // → { code: 0, data: ... }
+// 失败
+badRequest(msg)   // → throws { result: { code: 400, msg } }
+serverError()     // → { code: 500, msg: '系统异常，请重试' }
+```
+
+### 权限模型
+
+- `requireFamily(user)` — 必须已加入家庭
+- `requireParent(user)` — 必须是家长角色
+- `resolveChildId(user, event.childId)` — 家长需传 childId，孩子返回自身 id
+
+### 前端调用
+
+```javascript
+const { callCloud } = require('../../utils/cloud');
+const result = await callCloud('family', 'createInvitation', { targetRole: 'child', targetName: '小明' });
+```
+
+### 共享模块引用
+
+各云函数 `package.json` 中：`"@fambank/shared": "file:../_shared"`。本地 `npm install` 会创建符号链接。
+
+**部署注意**：符号链接在云端不可用。必须用「所有文件」模式部署，或在部署前将 `_shared` 实际复制到 `node_modules/@fambank/shared/`。
+
+### MySQL 环境变量
+
+| 变量 | 说明 |
+|------|------|
+| `MYSQL_ADDRESS` | host:port 格式（如 `172.17.0.4:3306`） |
+| `MYSQL_USERNAME` | 数据库用户名 |
+| `MYSQL_PASSWORD` | 数据库密码 |
+| `MYSQL_DBNAME` | 数据库名 |
+
+`db.js` 从 `MYSQL_ADDRESS` 中 split 出 host 和 port。每个云函数还需配置 VPC 才能连接 MySQL 内网。
+
+### 默认配置（config_override 表为空时生效）
+
+```
+split_ratio_a: 15, split_ratio_b: 30, split_ratio_c: 55
+b_tier1_rate: 200, b_tier1_limit: 100000 (1000元)
+b_tier2_rate: 120, b_tier3_rate: 30
+c_annual_rate: 500 (5%), penalty_multiplier: 2
+redemption_fee_rate: 10 (10%)
+wishlist_lock_months: 3, wishlist_valid_months: 12
+b_suspend_months: 12, c_lock_age: 18
+```
+
+### 结算并发控制
+
+`settlement` 使用 MySQL advisory lock：`GET_LOCK('fambank_settlement_{childId}', 10)`，每个孩子独立锁，10 秒超时。
+
+### 前端自动化测试（weapp-dev MCP）
+
+通过 `.mcp.json` 配置的 `weapp-dev` MCP 服务器可操作微信开发者工具模拟器，使用前需先启动自动化端口：
 
 ```bash
-# Backend
-cd backend && uv sync && uv run pytest
-uv run ruff check .
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-# Frontend
-cd frontend && npm install && npm run dev
-npm run build
-
-# Deploy
-sudo bash deploy/setup.sh          # 首次部署
-sudo systemctl restart fambank      # 重启服务
-journalctl -u fambank -f            # 查看日志
+/Applications/wechatwebdevtools.app/Contents/MacOS/cli auto --project /Users/corner/FamBank --auto-port 9420
 ```
 
-## Code Style
+核心工具：`mp_navigate`（导航）、`mp_screenshot`（截图）、`element_tap`（点击）、`element_input`（输入）、`page_getData`（读取页面数据）、`mp_getLogs`（控制台日志）。
 
-- Python: ruff (lint + format), ruff 0 告警才可提交
-- TypeScript: eslint + prettier
-- All monetary values: BIGINT cents (DB), Decimal (Python), string (JSON)
-- Every service function MUST create Transaction records with charter_clause reference
-- 日志: 所有 service 文件顶部 `logger = structlog.get_logger("模块名")`，业务操作必须有 INFO 日志，JSON 格式输出
-- 环境变量 LOG_LEVEL 控制日志级别（默认 INFO）
-- CI/CD: 推送 main 分支自动触发 test + deploy + release（自动创建 GitHub Release，日期版本号）
-- 安全: OTP/邀请码必须使用 `secrets` 模块生成，禁止 `random`；日志禁止记录验证码、邀请码等敏感值；SPA fallback 必须校验路径不逃逸出 frontend_dist
+### 常见陷阱
 
-## Recent Changes
-- 安全加固: JWT 启动校验、OTP 使用 secrets CSPRNG、安全响应头中间件、SPA 路径穿越防护、SQL 参数化、分页上限约束、日志脱敏
-- CI/CD 自动 Release: test + deploy 成功后自动创建 GitHub Release（日期版本号 vYYYY.MM.DD.N）
-- 002-multi-tenant-platform: Added Python 3.12 (backend, managed by uv), TypeScript (frontend) + FastAPI, Pydantic, uvicorn, aiomysql/SQLAlchemy, PyJWT, Vue 3, Vue Router, Vite
-
-<!-- MANUAL ADDITIONS START -->
-<!-- MANUAL ADDITIONS END -->
+- 云函数超时默认 3 秒，需在控制台改为 20 秒
+- 部署后热实例可能缓存旧代码约 30 秒
+- `auth` 函数在 MCP 端可能显示 `CreateFailed`，通过微信开发者工具部署正常
+- `centsToYuan(BigInt)` 返回字符串，`yuanToCents(string)` 返回 BigInt
+- `calculateSplit` 余数归入 C 账户

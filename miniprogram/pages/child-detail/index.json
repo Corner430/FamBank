@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "孩子详情",
+  "usingComponents": {
+    "account-card": "/components/account-card/index"
+  }
+}

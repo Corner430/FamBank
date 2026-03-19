@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "cloudbase": {
+      "command": "npx",
+      "args": [
+        "@cloudbase/cloudbase-mcp@latest"
+      ],
+      "env": {
+        "INTEGRATION_IDE": "Claude"
+      }
+    },
+    "weapp-dev": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@yfme/weapp-dev-mcp"
+      ],
+      "env": {
+        "WEAPP_WS_ENDPOINT": "ws://localhost:9420"
+      }
+    }
+  }
+}

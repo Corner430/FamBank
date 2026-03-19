@@ -1,0 +1,29 @@
+/* Violation page styles */
+.violation-card {
+  border-left: 6rpx solid #e74c3c;
+}
+
+.violation-desc {
+  display: block;
+  font-size: 30rpx;
+  color: #333;
+  line-height: 1.5;
+}
+
+.violation-amounts {
+  gap: 40rpx;
+}
+
+.violation-amount-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.badge-escalated {
+  background: #e74c3c;
+  color: #fff;
+  padding: 4rpx 16rpx;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+}

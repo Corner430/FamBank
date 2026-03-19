@@ -1,0 +1,98 @@
+<view class="container p-20">
+  <!-- Loading -->
+  <view wx:if="{{loading}}" class="flex-center mt-30">
+    <text class="text-muted">加载中...</text>
+  </view>
+
+  <block wx:else>
+    <!-- ===== Child View ===== -->
+    <block wx:if="{{!isParentRole}}">
+      <!-- C Balance Card -->
+      <view class="card balance-card">
+        <view class="flex-between">
+          <text class="text-muted">C账户余额</text>
+          <text class="amount">¥{{cBalance}}</text>
+        </view>
+        <view class="text-small text-muted mt-10">赎回将收取10%手续费，净额转入A账户</view>
+      </view>
+
+      <!-- Request Form -->
+      <view class="card mt-20">
+        <view class="section-header">发起赎回</view>
+        <view class="form-group">
+          <text class="form-label">赎回金额（元）</text>
+          <input class="form-input" type="digit" placeholder="请输入赎回金额"
+            value="{{amount}}" bindinput="onAmountInput" />
+        </view>
+        <view class="form-group">
+          <text class="form-label">备注（选填）</text>
+          <input class="form-input" placeholder="请输入赎回原因"
+            value="{{reason}}" bindinput="onReasonInput" maxlength="50" />
+        </view>
+        <button class="btn-primary" bindtap="handleSubmit" disabled="{{submitting}}">
+          {{submitting ? '提交中...' : '提交赎回请求'}}
+        </button>
+      </view>
+    </block>
+
+    <!-- ===== Parent View ===== -->
+    <block wx:if="{{isParentRole}}">
+      <child-selector
+        children="{{children}}"
+        selectedId="{{selectedChildId}}"
+        bind:select="onChildChange"
+      />
+    </block>
+
+    <!-- ===== Requests List (Shared) ===== -->
+    <view class="section-header mt-30">
+      <text class="text-bold">赎回记录</text>
+    </view>
+
+    <block wx:if="{{requests.length > 0}}">
+      <view wx:for="{{requests}}" wx:key="id" class="card request-card mt-10">
+        <view class="flex-between">
+          <text class="text-small text-muted">{{item.displayDate}}</text>
+          <view class="badge {{item.isPending ? 'badge-pending' : (item.status === 'approved' ? 'badge-approved' : 'badge-rejected')}}">
+            {{item.statusText}}
+          </view>
+        </view>
+
+        <view wx:if="{{isParentRole}}" class="requester-name mt-10">
+          <text class="text-muted text-small">申请人：</text>
+          <text>{{item.requester_name}}</text>
+        </view>
+
+        <view wx:if="{{item.reason}}" class="request-reason mt-10">
+          <text class="text-muted text-small">备注：{{item.reason}}</text>
+        </view>
+
+        <view class="flex request-amounts mt-10">
+          <view class="request-amount-item">
+            <text class="text-muted text-small">赎回金额</text>
+            <text class="text-bold">¥{{item.displayAmount}}</text>
+          </view>
+          <view class="request-amount-item">
+            <text class="text-muted text-small">手续费</text>
+            <text class="text-danger text-bold">¥{{item.displayFee}}</text>
+          </view>
+          <view class="request-amount-item">
+            <text class="text-muted text-small">到账金额</text>
+            <text class="text-success text-bold">¥{{item.displayNet}}</text>
+          </view>
+        </view>
+
+        <!-- Parent actions for pending requests -->
+        <view wx:if="{{isParentRole && item.isPending}}" class="flex action-buttons mt-20">
+          <button class="btn-primary btn-small flex-1" data-id="{{item.id}}" bindtap="handleApprove">通过</button>
+          <view style="width: 20rpx;"></view>
+          <button class="btn-danger btn-small flex-1" data-id="{{item.id}}" bindtap="handleReject">拒绝</button>
+        </view>
+      </view>
+    </block>
+
+    <view wx:elif="{{!loading}}" class="empty-state mt-30">
+      <text>暂无赎回记录</text>
+    </view>
+  </block>
+</view>
