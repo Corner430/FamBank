@@ -3,12 +3,14 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const {
+  createLogger,
   getUserByOpenid, requireFamily, requireParent, resolveChildId,
   getConnection, query, centsToYuan, yuanToCents, getConfigValue,
   ok, badRequest, notFound, serverError
 } = require('@fambank/shared');
 
 exports.main = async (event, context) => {
+  const log = createLogger('wishlist', context);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return { code: 401, msg: '未授权' };
   const user = await getUserByOpenid(OPENID);
@@ -26,7 +28,7 @@ exports.main = async (event, context) => {
     }
   } catch (e) {
     if (e.result) return e.result;
-    console.error('[wishlist]', event.action, e);
+    log.error(event.action, '系统异常', e);
     return serverError();
   }
 };
@@ -128,6 +130,7 @@ async function handleCreate(user, event) {
     }
 
     await conn.commit();
+    log.audit('create', 'wishlist_create', { childId, listId: Number(listId), itemCount: parsedItems.length });
     return ok({ id: Number(listId), registered_at: registeredAt });
   } catch (e) {
     await conn.rollback();

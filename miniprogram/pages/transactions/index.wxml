@@ -22,22 +22,12 @@
 
   <!-- Transaction List -->
   <block wx:if="{{items.length > 0}}">
-    <transaction-list items="{{items}}" />
+    <transaction-list items="{{items}}" hasMore="{{hasMore}}" loading="{{loading}}" bind:loadmore="onLoadMore" />
   </block>
 
   <!-- Empty State -->
   <view wx:if="{{!loading && items.length === 0}}" class="empty-state">
     <view class="empty-state-icon">📋</view>
     <view class="empty-state-text">暂无交易记录</view>
-  </view>
-
-  <!-- Loading More -->
-  <view wx:if="{{loading}}" class="loading-container">
-    <text class="text-muted">加载中...</text>
-  </view>
-
-  <!-- No More -->
-  <view wx:if="{{!hasMore && items.length > 0}}" class="no-more">
-    <text class="text-muted text-small">没有更多了</text>
   </view>
 </view>

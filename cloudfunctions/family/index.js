@@ -3,12 +3,14 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const {
+  createLogger,
   getUserByOpenid, requireFamily, requireParent, resolveChildId,
   getConnection, query, centsToYuan,
   ok, badRequest, forbidden, notFound, serverError
 } = require('@fambank/shared');
 
 exports.main = async (event, context) => {
+  const log = createLogger('family', context);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return { code: 401, msg: '未授权' };
 
@@ -43,7 +45,7 @@ exports.main = async (event, context) => {
     }
   } catch (e) {
     if (e.result) return e.result;
-    console.error('[family]', action, e);
+    log.error(action, '系统异常', e);
     return serverError();
   }
 };
@@ -77,6 +79,7 @@ async function handleCreate(user, event) {
     // Accounts are only for children
 
     await conn.commit();
+    log.audit('create', 'family_create', { familyId: Number(familyId), familyName, userName });
     return ok({
       family_id: Number(familyId),
       family_name: familyName,
@@ -143,6 +146,7 @@ async function handleJoin(user, event) {
     }
 
     await conn.commit();
+    log.audit('join', 'family_join', { familyId: Number(inv.family_id), role: inv.target_role, name: inv.target_name });
     return ok({
       family_id: Number(inv.family_id),
       role: inv.target_role,

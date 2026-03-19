@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const {
+  createLogger,
   getUserByOpenid, requireParent,
   getConnection, query, centsToYuan,
   getConfigValue, calculateCDividend, calculateBInterest, calculateOverflow, getPActive,
@@ -10,6 +11,7 @@ const {
 } = require('@fambank/shared');
 
 exports.main = async (event, context) => {
+  const log = createLogger('settlement', context);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return { code: 401, msg: '未授权' };
   const user = await getUserByOpenid(OPENID);
@@ -24,7 +26,7 @@ exports.main = async (event, context) => {
     }
   } catch (e) {
     if (e.result) return e.result;
-    console.error('[settlement]', event.action, e);
+    log.error(event.action, '系统异常', e);
     return serverError();
   }
 };
@@ -78,14 +80,14 @@ async function handleExecute(user, event) {
 
   const results = [];
   for (const child of children) {
-    const result = await settleChild(user.family_id, child.id, child.name, settDate);
+    const result = await settleChild(user.family_id, child.id, child.name, settDate, log);
     results.push(result);
   }
 
   return ok({ settlement_date: settDate, results });
 }
 
-async function settleChild(familyId, childId, childName, settDate) {
+async function settleChild(familyId, childId, childName, settDate, log) {
   const conn = await getConnection();
   try {
     // Acquire advisory lock
@@ -263,6 +265,14 @@ async function settleChild(familyId, childId, childName, settDate) {
       );
 
       await conn.commit();
+      log.audit('execute', 'settlement_execute', {
+        childId, childName, settDate,
+        dividend: centsToYuan(dividend),
+        overflow: centsToYuan(overflowAmount),
+        interest: centsToYuan(interest.total),
+        violationTransfer: centsToYuan(violationTransfer),
+        pActive: centsToYuan(pActive),
+      });
       return {
         child_id: childId, name: childName,
         c_dividend: centsToYuan(dividend),

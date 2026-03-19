@@ -3,12 +3,14 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const {
+  createLogger,
   getUserByOpenid, requireFamily, requireParent, resolveChildId,
   getConnection, query, centsToYuan, yuanToCents,
   ok, badRequest, forbidden, serverError
 } = require('@fambank/shared');
 
 exports.main = async (event, context) => {
+  const log = createLogger('accounts', context);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return { code: 401, msg: '未授权' };
 
@@ -34,7 +36,7 @@ exports.main = async (event, context) => {
     }
   } catch (e) {
     if (e.result) return e.result;
-    console.error('[accounts]', action, e);
+    log.error(action, '系统异常', e);
     return serverError();
   }
 };
@@ -104,6 +106,7 @@ async function handleSpendA(user, event) {
     );
 
     await conn.commit();
+    log.audit('spendA', 'spend_a', { childId, amount: centsToYuan(amountCents), newBalance: centsToYuan(newBalance) });
     return ok({ balance: centsToYuan(newBalance) });
   } catch (e) {
     await conn.rollback();
@@ -181,6 +184,7 @@ async function handlePurchaseB(user, event) {
     }
 
     await conn.commit();
+    log.audit('purchaseB', 'purchase_b', { childId, amount: centsToYuan(actualCost), deductPrincipal: centsToYuan(deductPrincipal), deductInterest: centsToYuan(deductInterest) });
     return ok({
       balance: centsToYuan(newPrincipal),
       interest_pool: centsToYuan(newInterestPool),
@@ -237,6 +241,7 @@ async function handleRefundB(user, event) {
     }
 
     await conn.commit();
+    log.audit('refundB', 'refund_b', { childId, principal: centsToYuan(principalCents), interest: centsToYuan(interestCents) });
     return ok({
       balance: centsToYuan(newPrincipal),
       interest_pool: centsToYuan(newInterestPool),

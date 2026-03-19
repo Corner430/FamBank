@@ -78,9 +78,9 @@
         <text class="text-danger">¥{{result.debtRepaid}}</text>
       </view>
 
-      <view wx:if="{{result.escrowed !== '0.00'}}" class="split-row">
+      <view wx:if="{{result.escrowed}}" class="split-row">
         <text class="text-muted">代管入金</text>
-        <text class="text-warning">¥{{result.escrowed}}</text>
+        <text class="text-warning">B账户收入已代管</text>
       </view>
     </view>
 

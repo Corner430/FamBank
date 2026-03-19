@@ -7,4 +7,5 @@ module.exports = {
   ...require('./interest'),
   ...require('./overflow'),
   ...require('./p-active'),
+  ...require('./logger'),
 };

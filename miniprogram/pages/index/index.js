@@ -1,6 +1,6 @@
 const { callCloud } = require('../../utils/cloud');
 const { isParent, isChild, waitForLogin } = require('../../utils/auth');
-const { ACCOUNT_NAMES, ACCOUNT_COLORS, TX_TYPE_LABELS } = require('../../utils/constants');
+const { ACCOUNT_NAMES, ACCOUNT_COLORS, TX_TYPE_LABELS, TX_OUTFLOW_TYPES } = require('../../utils/constants');
 
 Page({
   data: {
@@ -68,12 +68,16 @@ Page({
         color: ACCOUNT_COLORS[acc.type] || '#999',
       }));
       const items = txRes.items || [];
-      const recentTransactions = items.map(tx => ({
-        ...tx,
-        displayAmount: tx.amount,
-        typeLabel: TX_TYPE_LABELS[tx.type] || tx.type,
-        displayDate: tx.timestamp ? tx.timestamp.substring(0, 10) : '',
-      }));
+      const recentTransactions = items.map(tx => {
+        const isOutflow = !!TX_OUTFLOW_TYPES[tx.type];
+        return {
+          ...tx,
+          displayAmount: tx.amount,
+          isOutflow,
+          typeLabel: TX_TYPE_LABELS[tx.type] || tx.type,
+          displayDate: tx.timestamp ? tx.timestamp.substring(0, 10) : '',
+        };
+      });
       this.setData({
         accounts,
         totalDebt: accountsRes.total_debt,

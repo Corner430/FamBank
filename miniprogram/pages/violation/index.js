@@ -59,7 +59,7 @@ Page({
         ...v,
         displayAmount: v.violation_amount || '0.00',
         displayPenalty: v.penalty_amount || '0.00',
-        displayDate: v.violation_date || (v.created_at ? v.created_at.substring(0, 10) : ''),
+        displayDate: v.violation_date ? v.violation_date.substring(0, 10) : (v.created_at ? v.created_at.substring(0, 10) : ''),
       }));
       this.setData({ violations, loading: false });
     } catch (err) {

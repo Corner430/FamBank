@@ -2,9 +2,10 @@
 const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
-const { getOrCreateUser, ok, unauthorized, serverError } = require('@fambank/shared');
+const { createLogger, getOrCreateUser, ok, unauthorized, serverError } = require('@fambank/shared');
 
 exports.main = async (event, context) => {
+  const log = createLogger('auth', context);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return unauthorized();
 
@@ -19,7 +20,7 @@ exports.main = async (event, context) => {
     }
   } catch (e) {
     if (e.result) return e.result;
-    console.error('[auth]', action, e);
+    log.error(action, '系统异常', e);
     return serverError();
   }
 };

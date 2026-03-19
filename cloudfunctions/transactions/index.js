@@ -3,11 +3,13 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const {
+  createLogger,
   getUserByOpenid, requireFamily, resolveChildId, query, centsToYuan,
   ok, badRequest, serverError
 } = require('@fambank/shared');
 
 exports.main = async (event, context) => {
+  const log = createLogger('transactions', context);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return { code: 401, msg: '未授权' };
 
@@ -26,7 +28,7 @@ exports.main = async (event, context) => {
     }
   } catch (e) {
     if (e.result) return e.result;
-    console.error('[transactions]', action, e);
+    log.error(action, '系统异常', e);
     return serverError();
   }
 };
@@ -53,9 +55,9 @@ async function handleList(user, event) {
   const total = parseInt(countRows[0].total);
 
   // Paginate
-  const offset = (parseInt(page) - 1) * parseInt(pageSize);
-  sql += ' ORDER BY `timestamp` DESC LIMIT ? OFFSET ?';
-  params.push(parseInt(pageSize), offset);
+  const limitVal = parseInt(pageSize);
+  const offsetVal = (parseInt(page) - 1) * limitVal;
+  sql += ` ORDER BY \`timestamp\` DESC LIMIT ${limitVal} OFFSET ${offsetVal}`;
 
   const rows = await query(sql, params);
 

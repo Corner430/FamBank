@@ -14,7 +14,7 @@
         <text class="tx-amount {{item.source_account ? 'negative' : 'positive'}}">
           {{item.source_account ? '-' : '+'}}¥{{item.amount}}
         </text>
-        <text class="tx-time">{{item.timestamp}}</text>
+        <text class="tx-time">{{item.displayTime || item.timestamp}}</text>
       </view>
     </view>
   </view>

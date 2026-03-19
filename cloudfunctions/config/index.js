@@ -3,12 +3,14 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const {
+  createLogger,
   getUserByOpenid, requireParent,
   query, getAllConfig, DEFAULT_CONFIG,
   ok, badRequest, serverError
 } = require('@fambank/shared');
 
 exports.main = async (event, context) => {
+  const log = createLogger('config', context);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return { code: 401, msg: '未授权' };
   const user = await getUserByOpenid(OPENID);
@@ -24,7 +26,7 @@ exports.main = async (event, context) => {
     }
   } catch (e) {
     if (e.result) return e.result;
-    console.error('[config]', event.action, e);
+    log.error(event.action, '系统异常', e);
     return serverError();
   }
 };
@@ -63,6 +65,8 @@ async function handleAnnounce(user, event) {
     'INSERT INTO announcement (family_id, config_key, old_value, new_value, announced_at, effective_from) VALUES (?, ?, ?, ?, ?, ?)',
     [user.family_id, key, String(oldValue), String(parsedValue), announcedAt, effectiveFrom.toISOString().slice(0, 10)]
   );
+
+  log.audit(event.action, 'config_announce', { key, oldValue, newValue: parsedValue, effectiveFrom: effectiveFrom.toISOString().slice(0, 10) });
 
   return ok({
     key,

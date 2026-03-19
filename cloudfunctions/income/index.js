@@ -3,6 +3,7 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const {
+  createLogger,
   getUserByOpenid, requireFamily, requireParent, resolveChildId,
   getConnection, centsToYuan, yuanToCents, calculateSplit,
   getConfigRatios,
@@ -10,6 +11,7 @@ const {
 } = require('@fambank/shared');
 
 exports.main = async (event, context) => {
+  const log = createLogger('income', context);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return { code: 401, msg: '未授权' };
 
@@ -29,7 +31,7 @@ exports.main = async (event, context) => {
     }
   } catch (e) {
     if (e.result) return e.result;
-    console.error('[income]', action, e);
+    log.error(action, '系统异常', e);
     return serverError();
   }
 };
@@ -149,6 +151,13 @@ async function handleCreate(user, event) {
     );
 
     await conn.commit();
+    log.audit('create', 'income_create', {
+      childId,
+      amount: centsToYuan(amountCents),
+      split: { A: centsToYuan(aRemaining), B: centsToYuan(escrowed ? 0n : split.b), C: centsToYuan(actualC) },
+      debtRepaid: centsToYuan(aForDebt),
+      escrowed,
+    });
     return ok({
       total: centsToYuan(amountCents),
       split: {

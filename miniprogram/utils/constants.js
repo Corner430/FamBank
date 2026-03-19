@@ -29,6 +29,20 @@ module.exports = {
     CHILD: 'child',
   },
 
+  // Transaction types that represent outflow (negative)
+  TX_OUTFLOW_TYPES: {
+    a_spend: true,
+    purchase_debit_principal: true,
+    purchase_debit_interest: true,
+    c_redemption: true,
+    c_redemption_fee: true,
+    violation_penalty: true,
+    violation_transfer: true,
+    debt_repayment: true,
+    escrow_in: true,
+    b_overflow: true,
+  },
+
   // Transaction type labels
   TX_TYPE_LABELS: {
     income_split_a: 'A 收入分流',

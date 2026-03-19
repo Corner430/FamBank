@@ -22,7 +22,11 @@ Component({
       this.setData({ loading: true });
       try {
         const data = await callCloud('family', 'listInvitations');
-        this.setData({ invitations: data || [] });
+        const invitations = (data || []).map(item => ({
+          ...item,
+          displayExpiry: item.expires_at ? this.formatDate(item.expires_at) : '',
+        }));
+        this.setData({ invitations });
       } catch (err) {
         console.error('[invitation-manager] loadInvitations error:', err);
       } finally {

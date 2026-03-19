@@ -16,7 +16,13 @@ function getPool() {
     const password = process.env.MYSQL_PASSWORD || '';
     const database = process.env.MYSQL_DBNAME || 'fambank-prod-5g8v3rta823bda48';
 
-    console.log('[db] Creating pool:', { host, port, user, database, hasPassword: !!password });
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      func: '_shared',
+      message: 'Creating connection pool',
+      data: { host, port, user, database, hasPassword: !!password },
+    }));
 
     pool = mysql.createPool({
       host,

@@ -3,12 +3,14 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const {
+  createLogger,
   getUserByOpenid, requireFamily, requireParent, resolveChildId,
   getConnection, query, centsToYuan, yuanToCents, getConfigValue, getAllConfig,
   ok, badRequest, notFound, serverError
 } = require('@fambank/shared');
 
 exports.main = async (event, context) => {
+  const log = createLogger('redemption', context);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return { code: 401, msg: '未授权' };
   const user = await getUserByOpenid(OPENID);
@@ -24,7 +26,7 @@ exports.main = async (event, context) => {
     }
   } catch (e) {
     if (e.result) return e.result;
-    console.error('[redemption]', event.action, e);
+    log.error(event.action, '系统异常', e);
     return serverError();
   }
 };
@@ -54,6 +56,13 @@ async function handleRequest(user, event) {
     'INSERT INTO redemption_request (family_id, amount, fee, net, reason, requested_by) VALUES (?, ?, ?, ?, ?, ?)',
     [user.family_id, amountCents.toString(), fee.toString(), net.toString(), reason || '', childId]
   );
+
+  log.audit('request', 'redemption_request', {
+    childId,
+    amount: centsToYuan(amountCents),
+    fee: centsToYuan(fee),
+    net: centsToYuan(net),
+  });
 
   return ok({
     amount: centsToYuan(amountCents),
@@ -130,6 +139,7 @@ async function handleApprove(user, event) {
     }
 
     await conn.commit();
+    log.audit('approve', 'redemption_approve', { requestId, status: newStatus, childId: approve ? parseInt(req.requested_by) : undefined });
     return ok({ status: newStatus });
   } catch (e) {
     await conn.rollback();

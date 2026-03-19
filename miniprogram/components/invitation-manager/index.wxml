@@ -46,8 +46,8 @@
         </view>
       </view>
       <view class="invitation-detail">
-        <text class="detail-text">{{item.target_name || item.name}} · {{item.role === 'parent' ? '家长' : '孩子'}}</text>
-        <text class="detail-expiry" wx:if="{{item.expire_at}}">有效期至 {{item.expire_at}}</text>
+        <text class="detail-text">{{item.target_name || item.name}} · {{item.target_role === 'parent' ? '家长' : '孩子'}}</text>
+        <text class="detail-expiry" wx:if="{{item.displayExpiry}}">有效期至 {{item.displayExpiry}}</text>
       </view>
       <view
         class="revoke-btn"

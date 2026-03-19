@@ -71,7 +71,10 @@ Page({
         params.accountType = filterAccount;
       }
       const result = await callCloud('transactions', 'list', params);
-      const newItems = result.items || [];
+      const newItems = (result.items || []).map(item => ({
+        ...item,
+        displayTime: item.timestamp ? item.timestamp.replace('T', ' ').substring(0, 16) : '',
+      }));
       this.setData({
         items: reset ? newItems : this.data.items.concat(newItems),
         total: result.total || 0,
@@ -99,6 +102,12 @@ Page({
   },
 
   onReachBottom() {
+    if (this.data.hasMore && !this.data.loading) {
+      this.loadTransactions(false);
+    }
+  },
+
+  onLoadMore() {
     if (this.data.hasMore && !this.data.loading) {
       this.loadTransactions(false);
     }

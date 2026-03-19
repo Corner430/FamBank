@@ -92,8 +92,8 @@
               <text class="text-small">{{item.typeLabel}}</text>
               <text class="text-muted text-small">{{item.displayDate}}</text>
             </view>
-            <text class="{{item.amount >= 0 ? 'text-success' : 'text-danger'}} text-bold">
-              {{item.amount >= 0 ? '+' : ''}}¥{{item.displayAmount}}
+            <text class="{{item.isOutflow ? 'text-danger' : 'text-success'}} text-bold">
+              {{item.isOutflow ? '-' : '+'}}¥{{item.displayAmount}}
             </text>
           </view>
         </view>

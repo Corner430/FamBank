@@ -3,12 +3,14 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
 const {
+  createLogger,
   getUserByOpenid, requireFamily, requireParent, resolveChildId,
   getConnection, query, centsToYuan, yuanToCents, getConfigValue,
   ok, badRequest, serverError
 } = require('@fambank/shared');
 
 exports.main = async (event, context) => {
+  const log = createLogger('violations', context);
   const { OPENID } = cloud.getWXContext();
   if (!OPENID) return { code: 401, msg: '未授权' };
   const user = await getUserByOpenid(OPENID);
@@ -23,7 +25,7 @@ exports.main = async (event, context) => {
     }
   } catch (e) {
     if (e.result) return e.result;
-    console.error('[violations]', event.action, e);
+    log.error(event.action, '系统异常', e);
     return serverError();
   }
 };
@@ -107,6 +109,12 @@ async function handleCreate(user, event) {
     );
 
     await conn.commit();
+    log.audit('create', 'violation_create', {
+      childId,
+      violationAmount: centsToYuan(violationAmount),
+      penalty: centsToYuan(penalty),
+      isEscalated,
+    });
     return ok({
       violation_amount: centsToYuan(violationAmount),
       penalty: centsToYuan(penalty),
