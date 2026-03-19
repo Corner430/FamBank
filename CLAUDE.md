@@ -145,6 +145,28 @@ b_suspend_months: 12, c_lock_age: 18
 
 核心工具：`mp_navigate`（导航）、`mp_screenshot`（截图）、`element_tap`（点击）、`element_input`（输入）、`page_getData`（读取页面数据）、`mp_getLogs`（控制台日志）。
 
+### 小程序上传（miniprogram-ci）
+
+使用 `miniprogram-ci` CLI 上传代码到微信后台：
+
+```bash
+miniprogram-ci upload \
+  --pp ./miniprogram \
+  --pkp ./private.wx93708d49ac4c843c.key \
+  --appid wx93708d49ac4c843c \
+  --uv "1.0.0" \
+  --desc "版本描述" \
+  -r 1 \
+  --enable-es6 true \
+  --enable-es7 true \
+  --enable-minify true
+```
+
+- 上传密钥文件 `private.*.key` 已在 `.gitignore` 中排除，**不要提交到 Git**
+- 首次使用需在微信公众平台「开发 → 开发设置 → 小程序代码上传」中生成上传密钥
+- 如遇 IP 白名单错误，在「开发设置」中关闭白名单或添加当前 IP
+- `-r` 为 robot 编号（1-30），`--uv` 为版本号
+
 ### 常见陷阱
 
 - 云函数超时默认 3 秒，需在控制台改为 20 秒
