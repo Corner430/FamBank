@@ -127,7 +127,7 @@ FamBank/
 │   ├── redemption/           # C 赎回
 │   ├── wishlist/             # 愿望清单
 │   └── config/               # 参数配置
-├── doc/                      # 业务章程
+├── docs/                     # 文档（业务章程、运维手册）
 └── project.config.json       # 开发者工具配置
 ```
 
