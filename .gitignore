@@ -8,6 +8,7 @@ npm-debug.log*
 # WeChat Mini Program
 miniprogram_npm/
 project.private.config.json
+private.*.key
 
 # Environment
 .env
