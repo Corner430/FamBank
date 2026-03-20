@@ -7,7 +7,8 @@
 - CloudBase 环境: `fambank-prod-5g8v3rta823bda48`
 - 小程序 AppID: `wx93708d49ac4c843c`
 - 数据库: CloudBase MySQL，14 张表
-- 云函数运行时: Node.js 16.13（CloudBase 控制台配置）
+- 云函数运行时: Node.js 16（CloudBase 控制台 `config.json` 中 `"runtime": "Nodejs16"`）
+- 本地开发: Node.js 18+（运行 miniprogram-ci 等工具）
 
 ## 项目结构
 
@@ -41,14 +42,16 @@ miniprogram/
 
 cloudfunctions/
   _shared/                  # 共享模块 (@fambank/shared)
+    index.js                #   barrel export — 统一导出所有子模块
     db.js                   #   MySQL 连接池（读 MYSQL_ADDRESS 等环境变量）
     money.js                #   yuanToCents() / centsToYuan() / calculateSplit() — BigInt
-    errors.js               #   ok() / badRequest() / serverError() 等响应格式
+    errors.js               #   ok / fail / badRequest / unauthorized / forbidden / notFound / serverError
     auth-helper.js          #   getOrCreateUser / getUserByOpenid / requireParent / resolveChildId
     config-loader.js        #   getConfigValue / getConfigRatios / getAllConfig / DEFAULT_CONFIG
     interest.js             #   calculateCDividend / calculateBInterest
     overflow.js             #   calculateOverflow（B → C 溢出）
     p-active.js             #   getPActive（愿望清单目标价格，排除过期清单）
+    logger.js               #   createLogger(funcName, context) — JSON 结构化日志
   auth/                     # login
   family/                   # create / join / detail / dashboard / createInvitation / listInvitations / revokeInvitation
   accounts/                 # list / spendA / purchaseB / refundB
@@ -83,11 +86,17 @@ switch (event.action) {
 
 ```javascript
 // 成功
-ok(data)     // → { code: 0, data: ... }
-// 失败
-badRequest(msg)   // → throws { result: { code: 400, msg } }
-serverError()     // → { code: 500, msg: '系统异常，请重试' }
+ok(data)           // → { code: 0, data: ... }
+// 失败（均为 return，不是 throw）
+fail(code, msg)    // → { code, msg }
+badRequest(msg)    // → { code: 400, msg }
+unauthorized(msg)  // → { code: 401, msg: msg || '未授权' }
+forbidden(msg)     // → { code: 403, msg: msg || '无权操作' }
+notFound(msg)      // → { code: 404, msg: msg || '未找到' }
+serverError(msg)   // → { code: 500, msg: msg || '系统异常，请重试' }
 ```
+
+> 注意：`requireParent` / `requireFamily` 等权限检查函数通过 `throw` 抛出带 `result` 属性的错误，由外层 catch 返回。`badRequest()` 等响应函数本身是 `return`，不是 `throw`。
 
 ### 权限模型
 
@@ -119,7 +128,7 @@ const result = await callCloud('family', 'createInvitation', { targetRole: 'chil
 
 `db.js` 从 `MYSQL_ADDRESS` 中 split 出 host 和 port。每个云函数还需配置 VPC 才能连接 MySQL 内网。
 
-### 默认配置（config_override 表为空时生效）
+### 默认配置（config 表无对应 family_id 记录时生效）
 
 ```
 split_ratio_a: 15, split_ratio_b: 30, split_ratio_c: 55

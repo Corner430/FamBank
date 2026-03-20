@@ -4,10 +4,27 @@
 
 ### 1.1 前端小程序部署
 
+**方式一：微信开发者工具 GUI**
+
 1. 打开**微信开发者工具**，加载 `miniprogram/` 目录
 2. 点击工具栏右上角的 **上传** 按钮
 3. 填写版本号和备注，提交上传
 4. 在**微信公众平台** → 版本管理 → 提交审核 → 发布
+
+**方式二：miniprogram-ci CLI（推荐）**
+
+```bash
+miniprogram-ci upload \
+  --pp ./miniprogram \
+  --pkp ./private.wx93708d49ac4c843c.key \
+  --appid wx93708d49ac4c843c \
+  --uv "1.0.0" \
+  --desc "版本描述" \
+  -r 1 --enable-es6 true --enable-es7 true --enable-minify true
+```
+
+- 上传密钥文件 `private.*.key` 不得提交到 Git
+- 如遇 IP 白名单错误，在「开发设置」中关闭白名单或添加当前 IP
 
 > AppID: `wx93708d49ac4c843c`
 
@@ -52,12 +69,12 @@
 
 每个云函数都需要配置以下环境变量（在 CloudBase 控制台 → 云函数 → 函数配置）：
 
-| 变量名 | 值 | 说明 |
-|--------|---|------|
-| `MYSQL_ADDRESS` | `172.17.0.4:3306` | MySQL 内网地址:端口 |
-| `MYSQL_USERNAME` | `fambank` | 数据库用户名 |
-| `MYSQL_PASSWORD` | `FamBank2026!Prod` | 数据库密码 |
-| `MYSQL_DBNAME` | `fambank-prod-5g8v3rta823bda48` | 数据库名 |
+| 变量名 | 说明 |
+|--------|------|
+| `MYSQL_ADDRESS` | MySQL 内网地址:port（如 `172.17.0.4:3306`） |
+| `MYSQL_USERNAME` | 数据库用户名 |
+| `MYSQL_PASSWORD` | 数据库密码（见 CloudBase 控制台，不要写在代码或文档中） |
+| `MYSQL_DBNAME` | 数据库名（如 `fambank-prod-5g8v3rta823bda48`） |
 
 ### 1.5 VPC 网络配置
 
@@ -72,7 +89,7 @@
 
 - 默认超时 **3 秒**（太短）
 - 建议设置为 **20 秒**（在 CloudBase 控制台修改）
-- `config.json` 中的超时配置**不生效**，必须在控制台修改
+- `config.json` 中的超时配置仅作为文档参考，**实际生效的是控制台设置**
 
 特别注意 `settlement` 函数，结算逻辑复杂，务必设为 20s。
 

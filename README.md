@@ -26,16 +26,17 @@
 | 层级 | 技术 |
 |------|------|
 | 前端 | 微信小程序原生（WXML/WXSS/JS） |
-| 后端 | CloudBase 云函数 × 10（Node.js） |
+| 后端 | CloudBase 云函数 × 10（Node.js 16 运行时） |
 | 数据库 | CloudBase MySQL，14 张表，金额 BIGINT 分 |
 | 认证 | 微信 openid 自动鉴权 |
+| 日志 | JSON 结构化日志（createLogger） |
 
 ## 快速开始
 
 ### 前置要求
 
 - [微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)
-- Node.js 18+
+- Node.js 18+（本地开发和 miniprogram-ci 上传用）
 - 腾讯云开发 CloudBase 环境（含 MySQL）
 
 ### 1. 克隆并导入
@@ -76,6 +77,21 @@ done
 
 > 选择「所有文件」而非「云端安装依赖」，因为 `file:../_shared` 的符号链接在云端无法解析。
 
+也可以使用 `miniprogram-ci` CLI 上传前端代码：
+
+```bash
+npm install -g miniprogram-ci
+miniprogram-ci upload \
+  --pp ./miniprogram \
+  --pkp ./private.wx93708d49ac4c843c.key \
+  --appid wx93708d49ac4c843c \
+  --uv "1.0.0" \
+  --desc "版本描述" \
+  -r 1 --enable-es6 true --enable-es7 true --enable-minify true
+```
+
+> 上传密钥文件需在微信公众平台「开发设置」中生成，`private.*.key` 已在 `.gitignore` 中排除。
+
 ### 5. 创建数据库表
 
 通过 CloudBase 控制台执行建表 SQL（14 张表）。
@@ -114,9 +130,9 @@ FamBank/
 │   ├── pages/                # 11 个页面
 │   ├── components/           # 6 个业务组件
 │   ├── utils/                # 工具库
-│   └── images/               # TabBar 图标
+│   └── images/               # 图标（TabBar + 小程序头像）
 ├── cloudfunctions/           # CloudBase 云函数
-│   ├── _shared/              # 共享模块
+│   ├── _shared/              # 共享模块（含 logger.js 结构化日志）
 │   ├── auth/                 # 登录
 │   ├── family/               # 家庭管理
 │   ├── accounts/             # 账户操作
@@ -128,6 +144,7 @@ FamBank/
 │   ├── wishlist/             # 愿望清单
 │   └── config/               # 参数配置
 ├── docs/                     # 文档（业务章程、运维手册）
+├── scripts/                  # 工具脚本
 └── project.config.json       # 开发者工具配置
 ```
 
