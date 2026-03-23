@@ -28,20 +28,43 @@ miniprogram-ci upload \
 
 > AppID: `wx93708d49ac4c843c`
 
-### 1.2 云函数部署（微信开发者工具 GUI）
+### 1.2 云函数部署
 
-**操作步骤：**
+**方式一：miniprogram-ci CLI（推荐）**
+
+部署前必须将 `_shared` 符号链接替换为实际文件副本：
+
+```bash
+# 1. 替换符号链接为文件副本
+cd cloudfunctions
+for func in auth family accounts income transactions settlement violations redemption wishlist config; do
+  rm -rf $func/node_modules/@fambank/shared
+  cp -R _shared $func/node_modules/@fambank/shared
+done
+
+# 2. 批量部署全部 10 个云函数
+for func in auth family accounts income transactions settlement violations redemption wishlist config; do
+  miniprogram-ci cloud functions upload \
+    -e fambank-prod-5g8v3rta823bda48 \
+    -n $func \
+    -p ./cloudfunctions/$func \
+    --appid wx93708d49ac4c843c \
+    --pkp ./private.wx93708d49ac4c843c.key \
+    --pp ./miniprogram \
+    --remote-npm-install false
+done
+```
+
+> **为什么要替换符号链接？** `npm install` 创建的 `@fambank/shared` 是指向 `../../_shared` 的符号链接。`miniprogram-ci` 上传时不解析符号链接，云端会报 `Cannot find module '@fambank/shared'`。
+
+**方式二：微信开发者工具 GUI**
 
 1. 打开微信开发者工具
 2. 点击左侧栏 **云开发** 按钮进入控制台
 3. 在项目目录树中找到 `cloudfunctions/` 下的目标函数
 4. **右键** → **上传并部署：所有文件**
 
-**必须选"所有文件"**，原因：
-- 每个云函数的 `package.json` 中通过 `"@fambank/shared": "file:../_shared"` 引用共享模块
-- `npm install` 在本地会创建符号链接到 `_shared/` 目录
-- "云端安装依赖" 模式在云端执行 `npm install`，但云端无法解析 `file:../_shared` 路径
-- "所有文件" 模式会直接上传整个 `node_modules/`（含 `_shared` 的实际文件），确保依赖完整
+> GUI 方式会自动解析符号链接，无需手动替换。必须选"所有文件"而非"云端安装依赖"，因为云端无法解析 `file:../_shared` 路径。
 
 **部署后注意：**
 - CloudBase 会保留热实例约 **30 秒**，期间旧代码仍在服务
@@ -63,7 +86,7 @@ miniprogram-ci upload \
 | `overflow.js` | settlement |
 | `p-active.js` | settlement |
 
-**级联部署操作：** 逐个右键 → 上传并部署：所有文件。
+**级联部署操作：** 使用上述 miniprogram-ci 命令批量部署，或逐个在 GUI 中右键上传。
 
 ### 1.4 环境变量配置
 
@@ -276,7 +299,7 @@ sql += ` LIMIT ${limitVal} OFFSET ${offsetVal}`;
 2. `bignumber.js` 目录名导致 EISDIR 错误
 3. 部署后函数无法正常运行
 
-**唯一可靠的部署方式：** 微信开发者工具 GUI → 右键 → 上传并部署：所有文件
+**推荐部署方式：** `miniprogram-ci cloud functions upload`（见 1.2 节），或微信开发者工具 GUI。
 
 ---
 

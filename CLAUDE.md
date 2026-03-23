@@ -154,9 +154,9 @@ b_suspend_months: 12, c_lock_age: 18
 
 核心工具：`mp_navigate`（导航）、`mp_screenshot`（截图）、`element_tap`（点击）、`element_input`（输入）、`page_getData`（读取页面数据）、`mp_getLogs`（控制台日志）。
 
-### 小程序上传（miniprogram-ci）
+### 小程序前端上传（miniprogram-ci）
 
-使用 `miniprogram-ci` CLI 上传代码到微信后台：
+使用 `miniprogram-ci` CLI 上传前端代码到微信后台：
 
 ```bash
 miniprogram-ci upload \
@@ -176,10 +176,38 @@ miniprogram-ci upload \
 - 如遇 IP 白名单错误，在「开发设置」中关闭白名单或添加当前 IP
 - `-r` 为 robot 编号（1-30），`--uv` 为版本号
 
+### 云函数部署（miniprogram-ci）
+
+使用 `miniprogram-ci` 可以通过命令行部署云函数，无需手动在 GUI 中右键上传。
+
+**部署前准备** — 必须先将 `_shared` 符号链接替换为实际文件副本：
+
+```bash
+# 1. 将符号链接替换为文件副本（符号链接在云端不可用）
+cd cloudfunctions
+for func in auth family accounts income transactions settlement violations redemption wishlist config; do
+  rm -rf $func/node_modules/@fambank/shared
+  cp -R _shared $func/node_modules/@fambank/shared
+done
+
+# 2. 部署全部 10 个云函数
+for func in auth family accounts income transactions settlement violations redemption wishlist config; do
+  miniprogram-ci cloud functions upload \
+    -e fambank-prod-5g8v3rta823bda48 \
+    -n $func \
+    -p ./cloudfunctions/$func \
+    --appid wx93708d49ac4c843c \
+    --pkp ./private.wx93708d49ac4c843c.key \
+    --pp ./miniprogram \
+    --remote-npm-install false
+done
+```
+
+> **重要**：`npm install` 创建的 `@fambank/shared` 是指向 `../_shared` 的符号链接，`miniprogram-ci` 上传时不会解析符号链接，导致云端报 `Cannot find module '@fambank/shared'`。必须先用 `cp -R` 替换为实际文件副本。
+
 ### 常见陷阱
 
 - 云函数超时默认 3 秒，需在控制台改为 20 秒
 - 部署后热实例可能缓存旧代码约 30 秒
-- `auth` 函数在 MCP 端可能显示 `CreateFailed`，通过微信开发者工具部署正常
 - `centsToYuan(BigInt)` 返回字符串，`yuanToCents(string)` 返回 BigInt
 - `calculateSplit` 余数归入 C 账户
