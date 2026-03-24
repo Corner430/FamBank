@@ -19,6 +19,10 @@ Page({
   onShow() {
     waitForLogin((user) => {
       if (!user) return;
+      if (!user.family_id) {
+        wx.redirectTo({ url: '/pages/onboarding/index' });
+        return;
+      }
       this.setData({ role: user.role });
       if (isParent()) {
         this.loadParentDashboard();
