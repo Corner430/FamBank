@@ -33,72 +33,12 @@
 
 ## 快速开始
 
-### 前置要求
+1. 克隆项目，用微信开发者工具打开 `FamBank/` 目录
+2. 安装云函数依赖：`cd cloudfunctions/<func> && npm install`（10 个函数各执行一次）
+3. 在 CloudBase 控制台配置环境变量、VPC、超时时间
+4. 部署云函数和前端
 
-- [微信开发者工具](https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html)
-- Node.js 18+（本地开发和 miniprogram-ci 上传用）
-- 腾讯云开发 CloudBase 环境（含 MySQL）
-
-### 1. 克隆并导入
-
-```bash
-git clone <repo-url> FamBank
-```
-
-用微信开发者工具打开 `FamBank/` 目录。
-
-### 2. 安装云函数依赖
-
-```bash
-cd cloudfunctions
-for func in auth family accounts income transactions settlement violations redemption wishlist config; do
-  (cd $func && npm install)
-done
-```
-
-> `_shared` 模块通过 `"@fambank/shared": "file:../_shared"` 引用，`npm install` 会自动创建符号链接。
-
-### 3. 配置云函数环境变量
-
-在云开发控制台为每个云函数配置以下环境变量：
-
-| 变量 | 说明 | 示例 |
-|------|------|------|
-| `MYSQL_ADDRESS` | MySQL 地址（host:port） | `172.17.0.4:3306` |
-| `MYSQL_USERNAME` | 数据库用户名 | `fambank` |
-| `MYSQL_PASSWORD` | 数据库密码 | — |
-| `MYSQL_DBNAME` | 数据库名 | `fambank-prod-5g8v3rta823bda48` |
-
-同时需要为每个云函数配置 VPC 网络，使其能访问 MySQL 内网地址。
-
-### 4. 部署云函数
-
-在微信开发者工具中，右键点击每个云函数目录 → 「上传并部署：所有文件」。
-
-> 选择「所有文件」而非「云端安装依赖」，因为 `file:../_shared` 的符号链接在云端无法解析。
-
-也可以使用 `miniprogram-ci` CLI 上传前端代码：
-
-```bash
-npm install -g miniprogram-ci
-miniprogram-ci upload \
-  --pp ./miniprogram \
-  --pkp ./private.wx93708d49ac4c843c.key \
-  --appid wx93708d49ac4c843c \
-  --uv "1.0.0" \
-  --desc "版本描述" \
-  -r 1 --enable-es6 true --enable-es7 true --enable-minify true
-```
-
-> 上传密钥文件需在微信公众平台「开发设置」中生成，`private.*.key` 已在 `.gitignore` 中排除。
-
-### 5. 创建数据库表
-
-通过 CloudBase 控制台执行建表 SQL（14 张表）。
-
-### 6. 设置超时时间
-
-在云开发控制台将每个云函数的超时时间设为 20 秒（默认 3 秒不够用）。
+> 详细部署步骤见 [运维手册](docs/operations.md)。开发约定见 [CLAUDE.md](CLAUDE.md)。
 
 ## 使用说明
 
@@ -125,28 +65,14 @@ miniprogram-ci upload \
 
 ```
 FamBank/
-├── miniprogram/              # 小程序前端
-│   ├── app.js/json/wxss      # 全局配置
-│   ├── pages/                # 11 个页面
-│   ├── components/           # 6 个业务组件
-│   ├── utils/                # 工具库
-│   └── images/               # 图标（TabBar + 小程序头像）
-├── cloudfunctions/           # CloudBase 云函数
-│   ├── _shared/              # 共享模块（含 logger.js 结构化日志）
-│   ├── auth/                 # 登录
-│   ├── family/               # 家庭管理
-│   ├── accounts/             # 账户操作
-│   ├── income/               # 收入分流
-│   ├── transactions/         # 交易查询
-│   ├── settlement/           # 月度结算
-│   ├── violations/           # 违约记录
-│   ├── redemption/           # C 赎回
-│   ├── wishlist/             # 愿望清单
-│   └── config/               # 参数配置
+├── miniprogram/              # 小程序前端（11 页面 + 6 组件）
+├── cloudfunctions/           # CloudBase 云函数 × 10 + _shared 共享模块
 ├── docs/                     # 文档（业务章程、运维手册）
 ├── scripts/                  # 工具脚本
 └── project.config.json       # 开发者工具配置
 ```
+
+> 详细文件说明见 [CLAUDE.md](CLAUDE.md)。
 
 ## 设计原则
 

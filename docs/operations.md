@@ -1,5 +1,7 @@
 # FamBank 运维手册
 
+本文档是部署、运维、排障的唯一参考。项目概览见 [README.md](../README.md)，开发约定见 [CLAUDE.md](../CLAUDE.md)。
+
 ## 1. 部署指南
 
 ### 1.1 前端小程序部署
@@ -305,7 +307,34 @@ sql += ` LIMIT ${limitVal} OFFSET ${offsetVal}`;
 
 ## 4. 数据库操作
 
-### 4.1 通过 MCP 查询数据
+### 4.1 清空数据库（重置环境）
+
+`user` 和 `family` 之间存在循环外键（`user.family_id → family.id`，`family.created_by → user.id`），必须按顺序操作：
+
+```sql
+-- 1. 解除外键依赖
+UPDATE `user` SET family_id = NULL;
+
+-- 2. 按依赖顺序清空（无外键约束的表可 TRUNCATE）
+DELETE FROM wish_item;
+DELETE FROM wish_list;
+DELETE FROM redemption_request;
+DELETE FROM escrow;
+DELETE FROM debt;
+DELETE FROM violation;
+DELETE FROM settlement;
+DELETE FROM transaction_log;
+DELETE FROM account;
+DELETE FROM announcement;
+DELETE FROM config;
+DELETE FROM invitation;
+DELETE FROM family;
+DELETE FROM `user`;
+```
+
+> 注意：CloudBase MCP 的 `executeWriteSQL` 每次调用是独立会话，`SET FOREIGN_KEY_CHECKS = 0` 不会跨调用生效，因此必须按上述顺序手动解除依赖。
+
+### 4.2 通过 MCP 查询数据
 
 使用 CloudBase MCP 的 `executeReadOnlySQL` 工具可以安全地查询数据库（只读）：
 
@@ -313,7 +342,7 @@ sql += ` LIMIT ${limitVal} OFFSET ${offsetVal}`;
 executeReadOnlySQL(sql: "SELECT * FROM user LIMIT 10")
 ```
 
-### 4.2 常用查询模板
+### 4.3 常用查询模板
 
 **查用户信息：**
 ```sql
@@ -393,7 +422,7 @@ SELECT id, user_id, amount, status, released_at, created_at
 FROM escrow WHERE user_id = 1 ORDER BY created_at DESC;
 ```
 
-### 4.3 注意事项
+### 4.4 注意事项
 
 1. **`_openid` 列名**：`user` 表中 openid 列名为 `_openid`（带下划线前缀），这是 CloudBase 惯例
 2. **BigInt 类型**：所有金额字段（balance, amount 等）存储为 BIGINT，单位是**分**（cents）。显示时除以 100 转换为元

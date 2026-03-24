@@ -7,8 +7,10 @@
 - CloudBase 环境: `fambank-prod-5g8v3rta823bda48`
 - 小程序 AppID: `wx93708d49ac4c843c`
 - 数据库: CloudBase MySQL，14 张表
-- 云函数运行时: Node.js 16（CloudBase 控制台 `config.json` 中 `"runtime": "Nodejs16"`）
+- 云函数运行时: Node.js 16（`config.json` 中 `"runtime": "Nodejs16"`）
 - 本地开发: Node.js 18+（运行 miniprogram-ci 等工具）
+
+> 部署操作、环境变量、VPC 配置等见 [运维手册](docs/operations.md)。
 
 ## 项目结构
 
@@ -96,7 +98,7 @@ notFound(msg)      // → { code: 404, msg: msg || '未找到' }
 serverError(msg)   // → { code: 500, msg: msg || '系统异常，请重试' }
 ```
 
-> 注意：`requireParent` / `requireFamily` 等权限检查函数通过 `throw` 抛出带 `result` 属性的错误，由外层 catch 返回。`badRequest()` 等响应函数本身是 `return`，不是 `throw`。
+> `requireParent` / `requireFamily` 等权限检查函数通过 `throw` 抛出带 `result` 属性的错误，由外层 catch 返回。`badRequest()` 等响应函数本身是 `return`，不是 `throw`。
 
 ### 权限模型
 
@@ -115,18 +117,7 @@ const result = await callCloud('family', 'createInvitation', { targetRole: 'chil
 
 各云函数 `package.json` 中：`"@fambank/shared": "file:../_shared"`。本地 `npm install` 会创建符号链接。
 
-**部署注意**：符号链接在云端不可用。必须用「所有文件」模式部署，或在部署前将 `_shared` 实际复制到 `node_modules/@fambank/shared/`。
-
-### MySQL 环境变量
-
-| 变量 | 说明 |
-|------|------|
-| `MYSQL_ADDRESS` | host:port 格式（如 `172.17.0.4:3306`） |
-| `MYSQL_USERNAME` | 数据库用户名 |
-| `MYSQL_PASSWORD` | 数据库密码 |
-| `MYSQL_DBNAME` | 数据库名 |
-
-`db.js` 从 `MYSQL_ADDRESS` 中 split 出 host 和 port。每个云函数还需配置 VPC 才能连接 MySQL 内网。
+> 符号链接在云端不可用，部署时需特殊处理。详见 [运维手册 § 1.2](docs/operations.md)。
 
 ### 默认配置（config 表无对应 family_id 记录时生效）
 
@@ -153,57 +144,6 @@ b_suspend_months: 12, c_lock_age: 18
 ```
 
 核心工具：`mp_navigate`（导航）、`mp_screenshot`（截图）、`element_tap`（点击）、`element_input`（输入）、`page_getData`（读取页面数据）、`mp_getLogs`（控制台日志）。
-
-### 小程序前端上传（miniprogram-ci）
-
-使用 `miniprogram-ci` CLI 上传前端代码到微信后台：
-
-```bash
-miniprogram-ci upload \
-  --pp ./miniprogram \
-  --pkp ./private.wx93708d49ac4c843c.key \
-  --appid wx93708d49ac4c843c \
-  --uv "1.0.0" \
-  --desc "版本描述" \
-  -r 1 \
-  --enable-es6 true \
-  --enable-es7 true \
-  --enable-minify true
-```
-
-- 上传密钥文件 `private.*.key` 已在 `.gitignore` 中排除，**不要提交到 Git**
-- 首次使用需在微信公众平台「开发 → 开发设置 → 小程序代码上传」中生成上传密钥
-- 如遇 IP 白名单错误，在「开发设置」中关闭白名单或添加当前 IP
-- `-r` 为 robot 编号（1-30），`--uv` 为版本号
-
-### 云函数部署（miniprogram-ci）
-
-使用 `miniprogram-ci` 可以通过命令行部署云函数，无需手动在 GUI 中右键上传。
-
-**部署前准备** — 必须先将 `_shared` 符号链接替换为实际文件副本：
-
-```bash
-# 1. 将符号链接替换为文件副本（符号链接在云端不可用）
-cd cloudfunctions
-for func in auth family accounts income transactions settlement violations redemption wishlist config; do
-  rm -rf $func/node_modules/@fambank/shared
-  cp -R _shared $func/node_modules/@fambank/shared
-done
-
-# 2. 部署全部 10 个云函数
-for func in auth family accounts income transactions settlement violations redemption wishlist config; do
-  miniprogram-ci cloud functions upload \
-    -e fambank-prod-5g8v3rta823bda48 \
-    -n $func \
-    -p ./cloudfunctions/$func \
-    --appid wx93708d49ac4c843c \
-    --pkp ./private.wx93708d49ac4c843c.key \
-    --pp ./miniprogram \
-    --remote-npm-install false
-done
-```
-
-> **重要**：`npm install` 创建的 `@fambank/shared` 是指向 `../_shared` 的符号链接，`miniprogram-ci` 上传时不会解析符号链接，导致云端报 `Cannot find module '@fambank/shared'`。必须先用 `cp -R` 替换为实际文件副本。
 
 ### 常见陷阱
 
